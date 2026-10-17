@@ -1,0 +1,36 @@
+{
+  "name": "map-design",
+  "version": "0.1.0",
+  "private": true,
+  "description": "An agent skill that makes real, accurate maps: editorial data maps and city posters as one self-contained HTML, SVG and PNG. Real geodata, no API keys.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "build:vendor": "node tools/build-vendor.mjs",
+    "build:data": "node tools/build-data.mjs",
+    "build:fonts": "node tools/build-fonts.mjs",
+    "gallery": "node tools/build-gallery.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/incline-ltd/map-design.git"
+  },
+  "devDependencies": {
+    "@fontsource/eb-garamond": "5.2.7",
+    "@fontsource/ibm-plex-mono": "5.2.7",
+    "@fontsource/jost": "5.2.8",
+    "@fontsource/libre-franklin": "5.2.8",
+    "@fontsource/source-serif-4": "5.2.9",
+    "d3-array": "3.2.4",
+    "d3-geo": "3.1.1",
+    "esbuild": "0.25.10",
+    "topojson-client": "3.1.0",
+    "topojson-server": "3.0.1",
+    "topojson-simplify": "3.0.3",
+    "us-atlas": "3.0.1"
+  }
+}
