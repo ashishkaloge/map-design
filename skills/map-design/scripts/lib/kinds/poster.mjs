@@ -1,0 +1,163 @@
+// City posters from OpenStreetMap: streets, water, parks and coastline, with a
+// typographic footer. Rendered in screen space with a local Mercator projection.
+import { readFileSync } from "node:fs";
+import { resolve as resolvePath } from "node:path";
+import { posterTheme } from "../themes.mjs";
+import { resolveSize } from "../layout.mjs";
+import { fetchOsm, classify, coastToLand, clipPolyline } from "../osm.mjs";
+import { resolveLocation } from "../locate.mjs";
+import { findCountry } from "../data.mjs";
+import { embedFonts } from "../fonts.mjs";
+import { SpecError } from "../errors.mjs";
+import { esc, n, formatCoords } from "../svg.mjs";
+
+const ORDER = ["path", "service", "residential", "tertiary", "secondary", "primary", "trunk", "motorway"];
+const RAD = Math.PI / 180;
+const mercY = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * RAD) / 2));
+
+export async function renderPoster(spec, { base = process.cwd(), embedFonts: embed = true, check = false, log = (m) => process.stderr.write(`${m}\n`) } = {}) {
+  const theme = posterTheme(spec.theme ?? "noir");
+  const [W, H] = resolveSize(spec.size, "poster");
+  const report = { warnings: [], notes: [], resolved: [], unmatched: [], dropped: [] };
+
+  // Where.
+  let center;
+  let placeName = spec.title;
+  let countryName = spec.subtitle;
+  if (Array.isArray(spec.center)) {
+    center = spec.center.map(Number);
+    report.resolved.push({ ref: JSON.stringify(spec.center), as: "coordinates", lon: center[0], lat: center[1] });
+  } else if (spec.place) {
+    const loc = resolveLocation({ place: spec.place, country: spec.country });
+    if (loc.warning) report.warnings.push(loc.warning);
+    report.resolved.push({ ref: spec.place, as: loc.how, lon: loc.lon, lat: loc.lat });
+    center = [loc.lon, loc.lat];
+    placeName ??= loc.label;
+    countryName ??= loc.country ? findCountry(loc.country)?.name : undefined;
+  } else throw new SpecError('A poster needs "place" (a city from the gazetteer) or "center": [lon, lat].');
+  if (spec.offset) center = [center[0] + (spec.offset[0] ?? 0), center[1] + (spec.offset[1] ?? 0)];
+  placeName ??= "";
+
+  // Frame: radiusKm is half the poster's width on the ground.
+  const radiusKm = Number(spec.radiusKm ?? 4);
+  if (!(radiusKm > 0.3 && radiusKm <= 30)) throw new SpecError("radiusKm must be between 0.3 and 30.");
+  const kmPerDegLat = 111.32;
+  const halfLon = radiusKm / (kmPerDegLat * Math.cos(center[1] * RAD));
+  const k = W / (2 * halfLon * RAD); // pixels per radian of longitude
+  const cy = mercY(center[1]);
+  // y-up planar frame; screen y is H - Y.
+  const project = ([lon, lat]) => [W / 2 + (lon - center[0]) * RAD * k, H / 2 + (mercY(lat) - cy) * k];
+  const unproject = ([x, y]) => [center[0] + (x - W / 2) / k / RAD, (2 * Math.atan(Math.exp((y - H / 2) / k + cy)) - Math.PI / 2) / RAD];
+  const [west, south] = unproject([-W * 0.03, -H * 0.03]);
+  const [east, north] = unproject([W * 1.03, H * 1.03]);
+
+  if (check) {
+    report.notes.push(`Frame: ${south.toFixed(4)}, ${west.toFixed(4)} to ${north.toFixed(4)}, ${east.toFixed(4)} (south, west, north, east).`);
+    return { svg: "", report, width: W, height: H, theme, spec };
+  }
+  // A local Overpass JSON export can stand in for the download.
+  const osm = spec.osm
+    ? JSON.parse(readFileSync(resolvePath(base, spec.osm), "utf8"))
+    : await fetchOsm([south, west, north, east], { detail: spec.detail ?? (radiusKm > 9 ? "low" : "medium"), endpoint: spec.overpass, log });
+  let layers = classify(osm);
+  let roadCount = Object.values(layers.roads).reduce((s, r) => s + r.length, 0);
+  const detail = spec.detail ?? (radiusKm > 9 ? "low" : "medium");
+  let carFree = false;
+  if (!spec.osm && !spec.detail && detail === "medium" && roadCount < 400) {
+    carFree = true;
+    // Car-free centers (Venice, old towns) are mostly footpaths; fetch those too.
+    report.notes.push("Few streets for cars here; added footpaths and pedestrian streets (detail: high).");
+    layers = classify(await fetchOsm([south, west, north, east], { detail: "high", endpoint: spec.overpass, log }));
+    roadCount = Object.values(layers.roads).reduce((s, r) => s + r.length, 0);
+  }
+  if (!roadCount) report.warnings.push("No streets found here. Check the place or coordinates.");
+  report.notes.push(`OpenStreetMap features: ${roadCount} streets, ${layers.water.length} water areas, ${layers.parks.length} green areas, ${layers.coast.length} coastline ways.`);
+
+  const rect = [0, 0, W, H];
+  const toScreen = ([x, y]) => `${n(x)},${n(H - y)}`;
+  const ringPath = (ring) => `M${ring.map(toScreen).join("L")}Z`;
+  const polyPath = (rings) => rings.map((r) => ringPath(r.map(project))).join("");
+  const linePaths = (lines) => {
+    const out = [];
+    for (const l of lines) {
+      for (const piece of clipPolyline(l.map(project), [-20, -20, W + 20, H + 20])) {
+        out.push(`M${piece.coords.map(toScreen).join("L")}`);
+      }
+    }
+    return out.join("");
+  };
+
+  const parts = [];
+  // Land and sea.
+  const coast = coastToLand(layers.coast, project, rect);
+  if (coast && coast.sea) {
+    parts.push(`<rect width="${W}" height="${H}" fill="${theme.water}"/>`);
+    if (coast.land.length) parts.push(`<path d="${coast.land.map(ringPath).join("")}" fill="${theme.bg}" fill-rule="nonzero"/>`);
+  } else {
+    if (!coast) report.warnings.push("The coastline could not be closed cleanly; the sea is not shaded.");
+    parts.push(`<rect width="${W}" height="${H}" fill="${theme.bg}"/>`);
+  }
+  const showParks = spec.layers?.parks !== false;
+  const showWater = spec.layers?.water !== false;
+  if (showParks && layers.parks.length) parts.push(`<path d="${layers.parks.map(polyPath).join("")}" fill="${theme.park}" fill-rule="evenodd"/>`);
+  if (showWater && layers.water.length) parts.push(`<path d="${layers.water.map(polyPath).join("")}" fill="${theme.water}" fill-rule="evenodd"/>`);
+  if (showWater && layers.rivers.length) parts.push(`<path d="${linePaths(layers.rivers.map((r) => r.line))}" fill="none" stroke="${theme.water}" stroke-width="${n(3 * W / 1200, 2)}" stroke-linecap="round" stroke-linejoin="round"/>`);
+  if (spec.layers?.rail !== false && layers.rail.length) {
+    parts.push(`<path d="${linePaths(layers.rail)}" fill="none" stroke="${theme.rail}" stroke-width="${n(0.8 * W / 1200, 2)}" stroke-dasharray="${n(5 * W / 1200)} ${n(2.5 * W / 1200)}"/>`);
+  }
+  // Streets, minor first. Widths scale with the poster and shrink for wide areas.
+  const scale = (W / 1200) * Math.max(0.55, Math.min(1.35, 4 / radiusKm) ** 0.45);
+  for (const cls of ORDER) {
+    const lines = layers.roads[cls];
+    if (!lines?.length) continue;
+    // Where footpaths are the streets, draw them like streets.
+    const style = carFree && cls === "path" ? theme.roads.residential : theme.roads[cls];
+    const faint = !carFree && (cls === "service" || cls === "path");
+    const d = linePaths(lines);
+    if (!d) continue;
+    parts.push(`<path class="road ${cls}" d="${d}" fill="none" stroke="${style.color}" stroke-width="${n(style.width * scale, 2)}" stroke-linecap="round" stroke-linejoin="round"${faint ? ' stroke-opacity="0.7"' : ""}/>`);
+  }
+
+  // Typography.
+  const title = (spec.title ?? placeName).toUpperCase();
+  const subtitle = spec.subtitle === false ? "" : String(countryName ?? "").toUpperCase();
+  const u = W / 1200;
+  const fadeTop = H * (spec.textBand ?? 0.73);
+  const titleSize = Math.min(104 * u, (W * 0.8) / Math.max(4, title.length * 0.92));
+  const ls = titleSize * 0.32;
+  const baseY = H - 150 * u;
+  const furniture = [
+    `<defs><linearGradient id="fade" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${theme.bg}" stop-opacity="0"/><stop offset="0.45" stop-color="${theme.bg}" stop-opacity="0.9"/><stop offset="1" stop-color="${theme.bg}" stop-opacity="1"/></linearGradient></defs>`,
+    `<rect x="0" y="${n(fadeTop)}" width="${W}" height="${n(H - fadeTop)}" fill="url(#fade)"/>`,
+  ];
+  if (theme.accent) furniture.push(`<circle cx="${W / 2}" cy="${n(baseY - titleSize * 1.25)}" r="${n(13 * u)}" fill="${theme.accent}"/>`);
+  furniture.push(
+    `<text x="${n(W / 2 + ls / 2)}" y="${n(baseY)}" text-anchor="middle" font-family="${esc(theme.font)}" font-size="${n(titleSize)}" font-weight="600" letter-spacing="${n(ls)}" fill="${theme.text}">${esc(title)}</text>`,
+    `<line x1="${n(W / 2 - 46 * u)}" x2="${n(W / 2 + 46 * u)}" y1="${n(baseY + 34 * u)}" y2="${n(baseY + 34 * u)}" stroke="${theme.text}" stroke-width="${n(1.4 * u, 2)}"/>`,
+  );
+  if (subtitle) {
+    furniture.push(`<text x="${n(W / 2 + 6 * u)}" y="${n(baseY + 76 * u)}" text-anchor="middle" font-family="${esc(theme.sub)}" font-size="${n(26 * u)}" font-weight="300" letter-spacing="${n(10 * u)}" fill="${theme.text}">${esc(subtitle)}</text>`);
+  }
+  if (spec.coords !== false) {
+    furniture.push(`<text x="${W / 2}" y="${n(baseY + 112 * u)}" text-anchor="middle" font-family="${esc(theme.mono)}" font-size="${n(15 * u)}" font-weight="400" letter-spacing="${n(1.5 * u)}" fill="${theme.muted}">${esc(formatCoords(center[0], center[1]))}</text>`);
+  }
+  furniture.push(`<text x="${n(W - 24 * u)}" y="${n(H - 20 * u)}" text-anchor="end" font-family="${esc(theme.mono)}" font-size="${n(10 * u)}" fill="${theme.muted}" fill-opacity="0.8">© OpenStreetMap contributors</text>`);
+
+  let svg = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`Street map of ${placeName}`)}">`,
+    `<title>${esc(`${placeName}${countryName ? `, ${countryName}` : ""}`)}</title>`,
+    embed ? "<style data-fonts></style>" : "",
+    `<defs><clipPath id="poster-clip"><rect width="${W}" height="${H}"/></clipPath></defs>`,
+    `<g clip-path="url(#poster-clip)">${parts.join("")}</g>`,
+    furniture.join(""),
+    `</svg>`,
+  ].join("\n");
+  if (embed) svg = embedFonts(svg);
+  report.notes.push("Map data © OpenStreetMap contributors (ODbL). Keep the credit on the poster.");
+  return { svg, report, width: W, height: H, theme: { ...theme, dark: isDark(theme.bg) }, spec };
+}
+
+function isDark(hex) {
+  const v = parseInt(hex.slice(1), 16);
+  return ((v >> 16) & 255) * 0.3 + ((v >> 8) & 255) * 0.59 + (v & 255) * 0.11 < 90;
+}
