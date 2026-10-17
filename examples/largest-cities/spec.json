@@ -1,0 +1,16 @@
+{
+  "kind": "bubbles",
+  "theme": "ink",
+  "title": "The world's biggest cities",
+  "subtitle": "Population of the urban area, the 40 largest by Natural Earth's estimate",
+  "data": "cities.csv",
+  "value": "population",
+  "labelTop": 12,
+  "format": {
+    "compact": true
+  },
+  "legend": {
+    "title": "People"
+  },
+  "source": "Natural Earth populated places (pop_max)"
+}

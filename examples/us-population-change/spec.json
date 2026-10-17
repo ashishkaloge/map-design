@@ -1,0 +1,16 @@
+{
+  "kind": "choropleth",
+  "region": "usa",
+  "theme": "paper",
+  "title": "The South and Mountain West grew; New York, Illinois and California shrank",
+  "subtitle": "Change in resident population from the April 2020 base to July 2024",
+  "data": "states.csv",
+  "join": "fips",
+  "value": "change",
+  "scale": { "type": "threshold", "breaks": [-1, 0, 2, 4, 6], "palette": "brown-teal", "center": 0 },
+  "format": { "suffix": "%", "decimals": 0 },
+  "labels": "names",
+  "legend": { "title": "Population change, 2020–2024" },
+  "source": "US Census Bureau, Vintage 2024 population estimates (NST-EST2024)",
+  "note": "Puerto Rico (−2.5%) is not shown."
+}

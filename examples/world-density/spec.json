@@ -1,0 +1,11 @@
+{
+  "kind": "choropleth",
+  "title": "Where people are packed in",
+  "subtitle": "People per square kilometre, by country",
+  "data": "builtin:countries",
+  "join": "iso3",
+  "value": "density",
+  "scale": { "type": "threshold", "breaks": [10, 25, 50, 100, 250], "palette": "purple" },
+  "legend": { "title": "People per km²" },
+  "source": "Natural Earth population estimates (mostly 2019); areas from Natural Earth outlines"
+}

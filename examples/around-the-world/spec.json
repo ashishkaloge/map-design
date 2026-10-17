@@ -1,0 +1,19 @@
+{
+  "kind": "route",
+  "mode": "flight",
+  "theme": "paper",
+  "region": "world",
+  "title": "Around the world in seven flights",
+  "subtitle": "London to London, eastbound, along great circles",
+  "stops": [
+    { "iata": "LHR", "label": "London" },
+    { "iata": "DXB", "label": "Dubai" },
+    { "iata": "SIN", "label": "Singapore" },
+    { "iata": "SYD", "label": "Sydney" },
+    { "iata": "AKL", "label": "Auckland" },
+    { "iata": "LAX", "label": "Los Angeles" },
+    { "iata": "JFK", "label": "New York" },
+    { "iata": "LHR", "label": "London" }
+  ],
+  "source": "Airport positions from OurAirports"
+}

@@ -1,0 +1,16 @@
+{
+  "kind": "spikes",
+  "region": "usa",
+  "title": "America's largest urban areas",
+  "subtitle": "Urban areas with at least 400,000 people, spike height by population",
+  "data": "cities.csv",
+  "value": "population",
+  "labelTop": 9,
+  "format": {
+    "compact": true
+  },
+  "legend": {
+    "title": "People"
+  },
+  "source": "Natural Earth populated places (pop_max)"
+}

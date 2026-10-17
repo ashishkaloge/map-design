@@ -1,0 +1,141 @@
+{
+  "kind": "route",
+  "mode": "voyage",
+  "theme": "antique",
+  "region": "world",
+  "title": "The Voyage of HMS Beagle, 1831–1836",
+  "subtitle": "Charles Darwin's five years at sea, port by port",
+  "stops": [
+    {
+      "place": "Plymouth",
+      "country": "GBR",
+      "date": "Dec 1831"
+    },
+    {
+      "lon": -23.5,
+      "lat": 15.0,
+      "label": "Cape Verde",
+      "date": "Jan 1832"
+    },
+    {
+      "place": "Salvador",
+      "country": "BRA",
+      "label": "Bahia",
+      "date": "Feb 1832"
+    },
+    {
+      "place": "Rio de Janeiro",
+      "date": "Apr 1832",
+      "country": "BRA"
+    },
+    {
+      "place": "Montevideo",
+      "date": "Jul 1832",
+      "country": "URY"
+    },
+    {
+      "lon": -59.0,
+      "lat": -51.7,
+      "label": "Falkland Islands",
+      "date": "Mar 1833"
+    },
+    {
+      "lon": -67.5,
+      "lat": -55.9,
+      "waypoint": true
+    },
+    {
+      "lon": -73.5,
+      "lat": -53.5,
+      "label": "Tierra del Fuego",
+      "date": "Jun 1834"
+    },
+    {
+      "place": "Valparaiso",
+      "date": "Jul 1834",
+      "country": "CHL"
+    },
+    {
+      "place": "Lima",
+      "date": "Jul 1835",
+      "country": "PER"
+    },
+    {
+      "lon": -90.5,
+      "lat": -0.8,
+      "label": "Galápagos",
+      "date": "Sep 1835"
+    },
+    {
+      "lon": -149.6,
+      "lat": -17.5,
+      "label": "Tahiti",
+      "date": "Nov 1835"
+    },
+    {
+      "lon": 174.1,
+      "lat": -35.3,
+      "label": "Bay of Islands",
+      "date": "Dec 1835"
+    },
+    {
+      "place": "Sydney",
+      "date": "Jan 1836",
+      "country": "AUS"
+    },
+    {
+      "place": "Hobart",
+      "date": "Feb 1836",
+      "country": "AUS"
+    },
+    {
+      "lon": 117.9,
+      "lat": -35.0,
+      "label": "King George Sound",
+      "date": "Mar 1836"
+    },
+    {
+      "lon": 96.9,
+      "lat": -12.1,
+      "label": "Cocos (Keeling) Islands",
+      "date": "Apr 1836"
+    },
+    {
+      "place": "Port Louis",
+      "label": "Mauritius",
+      "date": "May 1836",
+      "country": "MUS"
+    },
+    {
+      "place": "Cape Town",
+      "date": "Jun 1836",
+      "country": "ZAF"
+    },
+    {
+      "lon": -5.7,
+      "lat": -15.9,
+      "label": "St Helena",
+      "date": "Jul 1836"
+    },
+    {
+      "lon": -14.4,
+      "lat": -7.9,
+      "label": "Ascension",
+      "date": "Jul 1836"
+    },
+    {
+      "lon": -27.2,
+      "lat": 38.7,
+      "label": "Azores",
+      "date": "Sep 1836"
+    },
+    {
+      "date": "Oct 1836",
+      "lon": -5.07,
+      "lat": 50.15,
+      "label": "Falmouth"
+    }
+  ],
+  "numbered": true,
+  "source": "Route after Darwin's Journal of Researches (1839); port positions approximate"
+}
