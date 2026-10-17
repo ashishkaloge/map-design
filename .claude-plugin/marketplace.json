@@ -1,0 +1,17 @@
+{
+  "name": "map-design",
+  "owner": {
+    "name": "Ashish Kaloge"
+  },
+  "metadata": {
+    "description": "Real, accurate maps from a prompt: choropleths, bubble and spike maps, routes, flows, locators and OpenStreetMap city posters."
+  },
+  "plugins": [
+    {
+      "name": "map-design",
+      "source": "./",
+      "description": "Real, accurate maps from a prompt: choropleths, bubble and spike maps, routes, flows, locators and OpenStreetMap city posters.",
+      "category": "productivity"
+    }
+  ]
+}
