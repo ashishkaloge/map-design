@@ -164,7 +164,10 @@ OpenStreetMap data.
 
 ### Use it without an agent
 
-The CLI is the same one the agent runs:
+The CLI is the same one the agent runs. Run these from the repository folder
+(after `git clone https://github.com/incline-ltd/map-design.git && cd map-design`),
+or use the full path to `map.mjs` from anywhere. `render` writes its files next
+to the spec; `poster` writes them to the folder you run it in.
 
 ```bash
 node skills/map-design/scripts/map.mjs render examples/world-density/spec.json
