@@ -12,7 +12,7 @@ export function pathFor(projection) {
  * Draw the base map. Returns { under, over, countries, path } where `under`
  * goes below thematic layers and `over` (borders, sphere outline) above them.
  */
-export function basemap({ framed, theme, rect, spec, focus = [], thematic = false, admin1Of }) {
+export function basemap({ framed, theme, rect, spec, focus = [], thematic = false, admin1Of, raster = "" }) {
   const { projection, isWorld, usa, globe, cropped } = framed;
   const path = pathFor(projection);
   const [[x0, y0], [x1, y1]] = rect;
@@ -74,6 +74,14 @@ export function basemap({ framed, theme, rect, spec, focus = [], thematic = fals
   over.push(`<path d="${path(borders)}" fill="none" stroke="${theme.border}" stroke-width="${n(Math.max(0.6, (thematic ? 0.8 : 0.9) * unit), 2)}" stroke-linejoin="round"/>`);
   over.push(`<path d="${landPath}" fill="none" stroke="${theme.coast}" stroke-width="${n(Math.max(0.4, 0.6 * unit), 2)}" stroke-linejoin="round"/>`);
   if (isWorld && !cropped) over.push(`<path d="${path({ type: "Sphere" })}" fill="none" stroke="${theme.sphere}" stroke-width="${n(Math.max(0.8, 1.1 * unit), 2)}"/>`);
+
+  // A raster basemap replaces the whole vector under-layer (water, graticule,
+  // land, context fills, rivers): keeping any of it would paint over the imagery.
+  // Borders and coastline outlines still draw on top of the tiles.
+  if (raster) {
+    under.length = 0;
+    under.push(raster);
+  }
   return { under, over, path, countries, resolution };
 }
 

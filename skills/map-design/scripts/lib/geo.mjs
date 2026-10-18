@@ -131,8 +131,15 @@ function autoProjection(object) {
   return { name: "azimuthal-equal-area", rotate: [-clon, -clat] };
 }
 
-function configure(projection, opts) {
-  if (opts.rotate && projection.rotate) projection.rotate(opts.rotate);
+function configure(projection, opts, name = "") {
+  // Cylindrical projections are only conformal/valid unrotated in latitude:
+  // `autoProjection` hands back a rotate with the centre latitude in it (meant for
+  // azimuthal/conic), and applying that to mercator tilts the sphere — imagery and
+  // graticule stop being axis-aligned. Keep the longitude shift, drop the rest.
+  if (opts.rotate && projection.rotate) {
+    const cylindrical = name === "mercator" || name === "equirectangular";
+    projection.rotate(cylindrical ? [opts.rotate[0] ?? 0, 0] : opts.rotate);
+  }
   if (opts.parallels && projection.parallels) projection.parallels(opts.parallels);
   if (opts.center && projection.center) projection.center(opts.center);
   return projection;
@@ -208,7 +215,7 @@ export function frame(spec, extent, dataObject) {
     return { projection, name: "orthographic", isWorld: true, globe: true, usa: false };
   }
   const projection = makeProjection(name);
-  configure(projection, { ...choice, ...userProj });
+  configure(projection, { ...choice, ...userProj }, name);
   if (name === "albers-usa" && !usa) usa = true;
   if (name !== "albers-usa" && usa && region !== "usa") usa = false;
   projection.fitExtent(extent, name === "albers-usa" ? features("us-states", "nation") : fit);

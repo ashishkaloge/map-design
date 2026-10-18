@@ -3,6 +3,7 @@ import { editorialTheme } from "./themes.mjs";
 import { compose, resolveSize, legendRow } from "./layout.mjs";
 import { frame, G } from "./geo.mjs";
 import { basemap } from "./basemap.mjs";
+import { rasterBasemap, resolveBasemap } from "./tiles.mjs";
 import { Placer } from "./labels.mjs";
 import { validate, loadRows } from "./spec.mjs";
 import { annotations } from "./kinds/common.mjs";
@@ -25,11 +26,22 @@ export function newReport() {
 }
 
 /** Render a spec to { svg, report, width, height, interactive }. */
-export async function render(spec, { base = process.cwd(), embedFonts = true, check = false, log } = {}) {
+export async function render(spec, { base = process.cwd(), embedFonts = true, check = false, log, fetchTile } = {}) {
   validate(spec);
   if (spec.kind === "poster") return renderPoster(spec, { base, embedFonts, check, ...(log ? { log } : {}) });
   const theme = editorialTheme(spec.theme ?? (spec.kind === "route" && spec.mode === "voyage" ? "antique" : "paper"));
   const report = newReport();
+  // A raster basemap needs a conformal, axis-aligned projection: XYZ tiles are
+  // Web Mercator squares and would shear under anything else. Credit them too.
+  const rasterCfg = resolveBasemap(spec.basemap);
+  if (rasterCfg) {
+    const asked = typeof spec.projection === "string" ? spec.projection : spec.projection?.name;
+    if (asked !== "mercator") {
+      spec = { ...spec, projection: "mercator" };
+      report.warnings.push("basemap: projection is mercator (XYZ tiles are Web Mercator)");
+    }
+    spec = { ...spec, source: [spec.source, rasterCfg.attribution].filter(Boolean).join(" · ") };
+  }
   const rows = loadRows(spec.data, base);
   const ctx = { spec, base, theme, rows, report };
   const kind = KIND_MODULES[spec.kind].prepare(ctx);
@@ -51,7 +63,22 @@ export async function render(spec, { base = process.cwd(), embedFonts = true, ch
     cy1 = Math.min(my1, b[1][1]);
   }
   const rect = [[mx0, cy0], [mx1, cy1]];
-  const base0 = basemap({ framed, theme, rect, spec, focus: kind.focus ?? [], thematic: kind.thematic, admin1Of: kind.admin1Of });
+  const raster = rasterCfg
+    ? await rasterBasemap({ spec, projection: framed.projection, rect, ...(fetchTile ? { fetchTile } : {}) })
+    : null;
+  if (raster?.warning) report.warnings.push(`basemap: ${raster.warning}`);
+  if (raster?.failures?.length) {
+    report.warnings.push(
+      `basemap: ${raster.failures.length}/${raster.requested} tile(s) failed (${raster.failures[0]}) — gaps are visible`
+    );
+  }
+  if (raster?.tiles) {
+    const zoomNote = raster.stretch && raster.stretch > 1.5 ? `, tiles upscaled ${raster.stretch.toFixed(1)}x — raise maxTiles for a sharper basemap` : "";
+    report.notes.push(`basemap: ${raster.tiles} tile(s) at zoom ${raster.zoom}${zoomNote} (${raster.attribution})`);
+  } else if (rasterCfg) {
+    report.warnings.push(`basemap: no tiles (${raster?.error ?? "unknown"}) — using the vector geography instead`);
+  }
+  const base0 = basemap({ framed, theme, rect, spec, focus: kind.focus ?? [], thematic: kind.thematic, admin1Of: kind.admin1Of, raster: raster?.group ?? "" });
   const unit = layout.unit;
   const placer = new Placer([mx0 + 2, cy0 + 2, mx1 - 2, cy1 - 2]);
   const env = { ...framed, path: base0.path, theme, unit, placer, rect, resolution: base0.resolution, report, layout };

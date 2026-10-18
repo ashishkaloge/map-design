@@ -92,6 +92,33 @@ This one runs as is: `builtin:countries` is bundled.
 
 Everything else, per kind: [references/spec.md](references/spec.md).
 
+## Basemaps (street-level detail)
+
+The vector geography is Natural Earth at 1:50m: accurate at country scale, blocky at city scale. When a map
+needs real streets under the data, ask for raster tiles:
+
+```json
+{ "kind": "points", "basemap": "dark", "theme": "ink",
+  "region": { "center": [12.55, 55.68], "radiusKm": 6 } }
+```
+
+- Keyless presets: `osm`, `osm-hot`. CARTO presets (`carto-light`, `carto-dark`, `carto-voyager`) need an API key —
+  without one they answer HTTP 200 with a watermarked tile, so the report warns rather than shipping it silently.
+  Or point at your own server: `{ "url": "https://…/{z}/{x}/{y}.png", "attribution": "…" }`.
+- For a dark basemap on a dark theme without a key, invert the OSM tiles:
+  `{ "preset": "osm", "filter": "invert(1) hue-rotate(180deg) brightness(0.9) saturate(0.55)" }`.
+- The projection is forced to `mercator` — tiles are Web Mercator squares and shear under anything else. The
+  report says when that happened.
+- Zoom is chosen automatically: the highest zoom that fits `maxTiles` (default 144) without stretching a tile past
+  1.5× its native 256 px. Override with `"zoom": 15`, or raise the budget (`"maxTiles": 400`) for a one-off city print.
+  `MAP_DESIGN_DEBUG_TILES=1` prints the tile budget and the chosen zoom for every render.
+- `filter` / `opacity` let the imagery sit under data: `{ "preset": "dark", "filter": "saturate(0.6) brightness(0.72)" }`.
+- Tiles are embedded as data URIs, so HTML and SVG stay self-contained, and cached in
+  `$XDG_CACHE_HOME/map-design/tiles` (`MAP_DESIGN_TILE_CACHE` overrides), so re-renders cost nothing.
+- Tiles that fail are retried with backoff; anything still missing is reported (a gap in the imagery is visible,
+  so it must never be silent). If every tile fails the map keeps the vector geography and the report says why.
+- Respect the host's tile policy. For bulk work, point `url` at your own tile server or a keyed provider.
+
 ## Design rules
 
 - The title states the finding; the subtitle says what is measured, where and when.

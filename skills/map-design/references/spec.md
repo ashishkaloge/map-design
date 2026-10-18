@@ -18,6 +18,7 @@ Paths in `data`, `stops` and `flows` are relative to the spec file.
 | `size` | string or object | by region shape | `landscape` 1600×1000, `wide` 1600×900, `square` 1200×1200, `portrait` 1200×1500, `story` 1080×1920, `poster` 1200×1600, `a4`, or `{ "width", "height" }` |
 | `region` | see below | by kind | What the map frames. |
 | `projection` | string or object | automatic | `equal-earth`, `natural-earth`, `globe`, `orthographic`, `albers-usa`, `albers`, `conic-equal-area`, `conic-conformal`, `azimuthal-equal-area`, `mercator`, `transverse-mercator`, `equirectangular`, `stereographic`. Object form: `{ "name", "rotate": [λ, φ], "parallels": [a, b] }`. |
+| `basemap` | string or object | none | Raster tiles drawn under the data: `"osm"`, `"osm-hot"`, `"light"`, `"dark"`, `"voyager"`, or `{ preset, url, attribution, zoom, maxTiles, opacity, filter, cache }`. Forces `mercator` (tiles are Web Mercator) and credits the source in the footer. A custom `url` takes `{z}/{x}/{y}`. |
 | `antarctica` | boolean | `false` | World maps crop Antarctica unless true. |
 | `graticule` | boolean | by theme | Latitude and longitude lines. |
 | `rivers` | boolean | by theme | Major rivers. |
