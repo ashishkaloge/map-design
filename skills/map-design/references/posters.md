@@ -35,6 +35,30 @@ most interesting frame. Use `center: [lon, lat]` or `offset: [dLon, dLat]` to
 include a river, a bay or a historic core. Coastal cities look best when the
 water takes a quarter to a third of the frame.
 
+## Mark a place
+
+Pins turn a city poster into a personal one: where you met, a first flat, a
+wedding venue, the office.
+
+```bash
+node <skill-dir>/scripts/map.mjs poster --lat 19.0990 --lon 72.8265 --title "Juhu" --subtitle "Mumbai" --theme neon --radius 3 --pin "Juhu Beach"
+```
+
+`--pin` marks the center; add `--pin-lat` and `--pin-lon` to place it
+elsewhere. In a spec, `markers` takes several pins:
+
+```json
+"markers": [
+  { "label": "Where we met" },
+  { "lon": 72.8347, "lat": 19.0596, "label": "Our first flat", "color": "#FF3DA6" }
+]
+```
+
+Neighborhoods and landmarks are not in the gazetteer, so pins and centers need
+coordinates. Ask the user for them or take them from a map they trust. Keep
+pins out of the bottom quarter, where the title sits; the report warns when a
+pin lands there or outside the frame.
+
 ## Themes
 
 | Theme | Look | Good for |

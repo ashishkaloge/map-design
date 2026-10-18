@@ -221,5 +221,6 @@ The report prints the total great-circle length in km and miles.
 | `coords` | `false` hides the coordinate line. |
 | `detail` | `low` (major roads), `medium` (default; all streets), `high` (adds service roads and paths). Areas wider than 9 km default to `low`. |
 | `layers` | `{ "water": false, "parks": false, "rail": false }` to hide layers. |
+| `markers` | Labeled pins: `[{ "label": "Juhu Beach" }]` marks the center; add `lon`/`lat` (or `place`) to put a pin elsewhere. Optional `color` and `size`. |
 | `size` | Default `poster` (1200×1600, exported at 3× = 3600×4800). |
 | `overpass` | Another Overpass API endpoint URL. |

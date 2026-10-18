@@ -114,3 +114,15 @@ test("colors and dashes cannot inject markup", async () => {
   const r = await render({ kind: "points", data: [{ place: "Oslo", label: '<script>alert(1)</script>' }], label: "label" }, opts);
   assert.doesNotMatch(r.svg, /<script>/);
 });
+
+test("posters take labeled pins, at the center or at a location", async () => {
+  const base = { kind: "poster", center: [10, 50], radiusKm: 1, osm: "fixtures/mini-osm.json", title: "Testburg" };
+  const r = await render({ ...base, markers: [{ label: "Home" }, { lon: 10.005, lat: 50.004, label: "Lake", color: "#00AA88" }] }, opts);
+  assert.equal((r.svg.match(/<g class="pin">/g) ?? []).length, 2);
+  assert.match(r.svg, />Home</);
+  assert.match(r.svg, /#00AA88/);
+  const far = await render({ ...base, markers: [{ lon: 11, lat: 51, label: "Far" }] }, opts);
+  assert.doesNotMatch(far.svg, /class="pin"/);
+  assert.ok(far.report.warnings.some((w) => /outside the poster frame/.test(w)));
+  await assert.rejects(render({ ...base, markers: [{ label: "x", color: "red;}" }] }, opts), /must be a color/);
+});

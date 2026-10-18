@@ -9,7 +9,7 @@ import { resolveLocation } from "../locate.mjs";
 import { findCountry } from "../data.mjs";
 import { embedFonts } from "../fonts.mjs";
 import { SpecError } from "../errors.mjs";
-import { esc, n, formatCoords } from "../svg.mjs";
+import { esc, n, formatCoords, textWidth } from "../svg.mjs";
 
 const ORDER = ["path", "service", "residential", "tertiary", "secondary", "primary", "trunk", "motorway"];
 const RAD = Math.PI / 180;
@@ -130,6 +130,7 @@ export async function renderPoster(spec, { base = process.cwd(), embedFonts: emb
     `<defs><linearGradient id="fade" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${theme.bg}" stop-opacity="0"/><stop offset="0.45" stop-color="${theme.bg}" stop-opacity="0.9"/><stop offset="1" stop-color="${theme.bg}" stop-opacity="1"/></linearGradient></defs>`,
     `<rect x="0" y="${n(fadeTop)}" width="${W}" height="${n(H - fadeTop)}" fill="url(#fade)"/>`,
   ];
+  furniture.push(...drawPins(spec.markers ?? spec.pins, { project, W, H, u, theme, report, fadeTop, center }));
   if (theme.accent) furniture.push(`<circle cx="${W / 2}" cy="${n(baseY - titleSize * 1.25)}" r="${n(13 * u)}" fill="${theme.accent}"/>`);
   furniture.push(
     `<text x="${n(W / 2 + ls / 2)}" y="${n(baseY)}" text-anchor="middle" font-family="${esc(theme.font)}" font-size="${n(titleSize)}" font-weight="600" letter-spacing="${n(ls)}" fill="${theme.text}">${esc(title)}</text>`,
@@ -155,6 +156,61 @@ export async function renderPoster(spec, { base = process.cwd(), embedFonts: emb
   if (embed) svg = embedFonts(svg);
   report.notes.push("Map data © OpenStreetMap contributors (ODbL). Keep the credit on the poster.");
   return { svg, report, width: W, height: H, theme: { ...theme, dark: isDark(theme.bg) }, spec };
+}
+
+/**
+ * Map pins: a teardrop marker with a label card. Positions accept any location
+ * reference (coordinates, a gazetteer place); `color` overrides the theme's pin color.
+ */
+function drawPins(markers, { project, W, H, u, theme, report, fadeTop, center }) {
+  if (!markers) return [];
+  const list = Array.isArray(markers) ? markers : [markers];
+  const out = [];
+  for (const m of list) {
+    const placed = ["lon", "lng", "longitude", "lat", "latitude", "place", "city", "iata", "country", "state"].some((k) => m[k] != null);
+    const ref = m.at ?? m.location ?? (placed ? m : null);
+    let loc;
+    try {
+      // A pin without a position marks the poster's center.
+      loc = ref == null || ref === "center" ? { lon: center[0], lat: center[1], how: "poster center" } : resolveLocation(ref);
+    } catch (e) {
+      report.warnings.push(`Pin "${m.label ?? ""}": ${e.message}`);
+      continue;
+    }
+    report.resolved.push({ ref: `pin ${m.label ?? ""}`.trim(), as: loc.how, lon: loc.lon, lat: loc.lat });
+    const [px, py] = project([loc.lon, loc.lat]);
+    const x = px;
+    const y = H - py;
+    if (x < 0 || x > W || y < 0 || y > H) {
+      report.warnings.push(`Pin "${m.label ?? loc.label ?? ""}" is outside the poster frame; move the center or enlarge radiusKm.`);
+      continue;
+    }
+    if (y > fadeTop) report.warnings.push(`Pin "${m.label ?? ""}" sits in the title band; use "offset" to move the map center south so the pin rises.`);
+    const color = m.color ?? theme.pin ?? theme.text;
+    const R = 21 * u * (m.size ?? 1);
+    const Hp = 3.2 * R;
+    const cyHead = y - Hp + R;
+    const pin = `M${n(x)},${n(y)}C${n(x - R * 0.32)},${n(y - Hp * 0.36)} ${n(x - R)},${n(y - Hp * 0.5)} ${n(x - R)},${n(cyHead)}A${n(R)},${n(R)} 0 1 1 ${n(x + R)},${n(cyHead)}C${n(x + R)},${n(y - Hp * 0.5)} ${n(x + R * 0.32)},${n(y - Hp * 0.36)} ${n(x)},${n(y)}Z`;
+    out.push(`<g class="pin">`);
+    out.push(`<ellipse cx="${n(x)}" cy="${n(y)}" rx="${n(R * 0.75)}" ry="${n(R * 0.24)}" fill="#000000" fill-opacity="0.28"/>`);
+    out.push(`<circle cx="${n(x)}" cy="${n(y)}" r="${n(R * 1.5)}" fill="none" stroke="${color}" stroke-opacity="0.55" stroke-width="${n(2 * u, 2)}"/>`);
+    out.push(`<path d="${pin}" fill="${color}" stroke="${theme.bg}" stroke-width="${n(2.2 * u, 2)}" stroke-linejoin="round"/>`);
+    out.push(`<circle cx="${n(x)}" cy="${n(cyHead)}" r="${n(R * 0.4)}" fill="${theme.bg}"/>`);
+    const label = m.label ?? null;
+    if (label) {
+      const size = 24 * u * (m.size ?? 1);
+      const family = theme.font;
+      const w = textWidth(label, size, family, { weight: 600, letterSpacing: 1.2 * u }) + 30 * u;
+      const h = size * 1.75;
+      const right = x + R + 14 * u + w < W - 20 * u;
+      const bx = right ? x + R + 12 * u : x - R - 12 * u - w;
+      const by = cyHead - h / 2;
+      out.push(`<rect x="${n(bx)}" y="${n(by)}" width="${n(w)}" height="${n(h)}" rx="${n(h / 2)}" fill="${theme.bg}" fill-opacity="0.94" stroke="${color}" stroke-width="${n(2 * u, 2)}"/>`);
+      out.push(`<text x="${n(bx + w / 2)}" y="${n(cyHead + size * 0.36)}" text-anchor="middle" font-family="${esc(family)}" font-size="${n(size)}" font-weight="600" letter-spacing="${n(1.2 * u)}" fill="${theme.text}">${esc(label)}</text>`);
+    }
+    out.push(`</g>`);
+  }
+  return out;
 }
 
 function isDark(hex) {

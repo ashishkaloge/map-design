@@ -198,36 +198,43 @@ const road = (all, scale = {}) => ({
 export const POSTER = {
   noir: {
     label: "White streets on black.",
+    pin: "#FF5A4E",
     bg: "#0D0D0D", water: "#262A31", park: "#161816", text: "#F4F4F2", muted: "#9A9A96",
     roads: road("#ECECEA"), rail: "#5C5C5A", font: GEOMETRIC, sub: GEOMETRIC, mono: MONO,
   },
   paper: {
     label: "Charcoal on warm paper. Prints well.",
+    pin: "#C2412D",
     bg: "#F3EEE4", water: "#D6E0E1", park: "#E4E6D8", text: "#1F1D1A", muted: "#6D675E",
     roads: road("#2A2825"), rail: "#8B857B", font: GEOMETRIC, sub: GEOMETRIC, mono: MONO,
   },
   blueprint: {
     label: "Cyanotype linework.",
+    pin: "#FFD166",
     bg: "#1B3A62", water: "#142C4B", park: "#1F426D", text: "#EEF5FF", muted: "#A9C1E2",
     roads: road("#DCE8F7"), rail: "#7FA0CC", font: MONO, sub: MONO, mono: MONO,
   },
   sumi: {
     label: "Ink on washi paper with a red seal.",
+    pin: "#B7282E",
     bg: "#F2ECDF", water: "#D9D3C6", park: "#E7E1D2", text: "#1A1A1A", muted: "#6B655B", accent: "#B7282E",
     roads: road("#1A1A1A", { minor: 0.9 }), rail: "#77716A", font: GARAMOND, sub: GARAMOND, mono: GARAMOND,
   },
   terracotta: {
     label: "Burnt orange streets on sandstone.",
+    pin: "#1D5C63",
     bg: "#EFE2D2", water: "#D8C6B0", park: "#E5D7C2", text: "#6A2C14", muted: "#9A6448",
     roads: road("#A9472A"), rail: "#C08A6C", font: GEOMETRIC, sub: GEOMETRIC, mono: MONO,
   },
   azulejo: {
     label: "Cobalt on white, after Portuguese tiles.",
+    pin: "#E39B2D",
     bg: "#F8F7F3", water: "#D9E3F2", park: "#ECEFF4", text: "#1C4A9C", muted: "#5A78B3",
     roads: road("#1C4A9C"), rail: "#7E97C7", font: SERIF, sub: SERIF, mono: MONO,
   },
   neon: {
     label: "Synthwave night: magenta arteries, violet streets.",
+    pin: "#FFE14D",
     bg: "#110A1E", water: "#1A1036", park: "#160D29", text: "#FFFFFF", muted: "#C7A8FF",
     roads: {
       ...road("#7D5CFF"),
@@ -238,11 +245,13 @@ export const POSTER = {
   },
   forest: {
     label: "Cream streets on deep green.",
+    pin: "#F2A541",
     bg: "#1F3A2E", water: "#2C4B40", park: "#244236", text: "#ECE6D3", muted: "#B4C2A8",
     roads: road("#ECE6D3"), rail: "#6D8574", font: SERIF, sub: SERIF, mono: MONO,
   },
   mono: {
     label: "Pure black on white. Maximum contrast.",
+    pin: "#E30613",
     bg: "#FFFFFF", water: "#E7E7E7", park: "#F2F2F2", text: "#000000", muted: "#555555",
     roads: road("#000000"), rail: "#888888", font: GEOMETRIC, sub: GEOMETRIC, mono: MONO,
   },

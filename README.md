@@ -41,6 +41,7 @@ Once installed, ask your agent the way you would ask a designer:
 - *"Where is Bhutan? Show it with a small globe."*
 - *"Plot my trip: London, Dubai, Singapore, Sydney, Auckland, LA, New York, back to London."*
 - *"Bubble map of our stores by revenue. The data is in stores.csv."*
+- *"Poster of the streets around Juhu Beach with a pin where we met."*
 
 The agent writes a short JSON spec, runs one command, looks at the PNG, fixes
 what it sees, and hands you the files. Every place it resolved and every row it
@@ -172,6 +173,7 @@ to the spec; `poster` writes them to the folder you run it in.
 ```bash
 node skills/map-design/scripts/map.mjs render examples/world-density/spec.json
 node skills/map-design/scripts/map.mjs poster --place "Kyoto" --country JPN --theme sumi --radius 3
+node skills/map-design/scripts/map.mjs poster --lat 19.0990 --lon 72.8265 --title "Juhu" --theme neon --radius 3 --pin "Juhu Beach"
 node skills/map-design/scripts/map.mjs find "Springfield"
 node skills/map-design/scripts/map.mjs themes
 ```
@@ -187,7 +189,7 @@ node skills/map-design/scripts/map.mjs themes
 | `route` | Trips, voyages, itineraries, flights by airport code | [HMS Beagle](examples/beagle-voyage/spec.json) |
 | `flows` | Movement with volume: migration, trade, traffic | [spec reference](skills/map-design/references/spec.md#flows) |
 | `locator` | "Where is it?" with context and an inset globe | [Bhutan](examples/where-is-bhutan/spec.json) |
-| `poster` | Any city's streets as print art, from OpenStreetMap | [Lisbon](examples/lisbon/spec.json) |
+| `poster` | Any city's streets as print art, from OpenStreetMap, with optional labeled pins | [Lisbon](examples/lisbon/spec.json) |
 
 **Themes for data maps:** `paper` (default), `atlas`, `ink`, `antique`, `swiss`, `blueprint`.
 **Themes for posters:** `noir`, `paper`, `mono`, `blueprint`, `sumi`, `terracotta`, `azulejo`, `neon`, `forest`.

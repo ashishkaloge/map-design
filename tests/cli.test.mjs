@@ -49,4 +49,7 @@ test("posters are named after the title when there is no place", () => {
   const r = spawnSync(process.execPath, [cli, "poster", "--lat", "50", "--lon", "10", "--title", "Juhu Beach", "--radius", "1", "--osm", fixture, "--no-png"], { encoding: "utf8", cwd: dir });
   assert.equal(r.status, 0, r.stderr);
   assert.ok(existsSync(join(dir, "juhu-beach-noir.svg")));
+  const pinned = spawnSync(process.execPath, [cli, "poster", "--lat", "50", "--lon", "10", "--title", "Pinned", "--pin", "Our first flat", "--radius", "1", "--osm", fixture, "--no-png"], { encoding: "utf8", cwd: dir });
+  assert.equal(pinned.status, 0, pinned.stderr);
+  assert.match(readFileSync(join(dir, "pinned-noir.svg"), "utf8"), />Our first flat</);
 });

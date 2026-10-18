@@ -129,7 +129,9 @@ node <skill-dir>/scripts/map.mjs poster --place "Lisbon" --country PRT --theme a
 
 Or a spec with `"kind": "poster"`. `radiusKm` is half the poster's width on the
 ground: 1.5–3 for an old town, 4–6 for a city center, 8–15 for a metro area
-(larger areas switch to major roads only). Posters download OpenStreetMap data
+(larger areas switch to major roads only). Add `--pin "Label"` (or
+`markers` in a spec) to mark a spot. Neighborhoods and landmarks need
+coordinates: ask the user rather than guessing. Posters download OpenStreetMap data
 from the public Overpass API, cache it, and must keep the
 "© OpenStreetMap contributors" credit. Details: [references/posters.md](references/posters.md).
 
