@@ -42,6 +42,12 @@ test("unknown palettes and empty data fail with guidance", () => {
   assert.throws(() => colorScale(["x"], {}, theme), /No numeric values/);
 });
 
+test("continuous scales leave missing values uncolored", () => {
+  const s = colorScale([0, 10, NaN], { type: "continuous" }, theme);
+  for (const value of [NaN, Infinity, null, undefined]) assert.equal(s.color(value), null);
+  assert.match(s.color(0), /^#[0-9A-F]{6}$/);
+});
+
 test("circle areas, not radii, scale with value", () => {
   const r = radiusScale([100], 10);
   assert.equal(r(100), 10);

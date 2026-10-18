@@ -1,16 +1,22 @@
 // Bundles d3-geo, d3-array and topojson-client into one dependency-free file
 // that ships inside the skill. Run with `npm run build:vendor`.
 import { build } from "esbuild";
-import { readFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
 
+const dependencies = ["d3-geo", "d3-array", "topojson-client"];
+const licenses = new URL("../skills/map-design/scripts/vendor/licenses/", import.meta.url);
+mkdirSync(licenses, { recursive: true });
+for (const name of dependencies) {
+  copyFileSync(new URL(`../node_modules/${name}/LICENSE`, import.meta.url), new URL(`${name}-LICENSE`, licenses));
+}
 const pkg = (name) => JSON.parse(readFileSync(new URL(`../node_modules/${name}/package.json`, import.meta.url)));
 const banner = [
   "// Vendored for map-design. Do not edit; rebuild with `npm run build:vendor`.",
-  ...["d3-geo", "d3-array", "topojson-client"].map((n) => {
+  ...dependencies.map((n) => {
     const p = pkg(n);
     return `// ${n} ${p.version} (${p.license}) ${typeof p.repository === "string" ? p.repository : p.repository?.url}`;
   }),
-  "// Licenses: see THIRD_PARTY_NOTICES.md in the map-design repository.",
+  "// Full upstream licenses are bundled in ./licenses/; see ../../THIRD_PARTY_NOTICES.md.",
 ].join("\n");
 
 const common = {

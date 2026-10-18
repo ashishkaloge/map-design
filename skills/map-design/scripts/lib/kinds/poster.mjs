@@ -24,8 +24,10 @@ export async function renderPoster(spec, { base = process.cwd(), embedFonts: emb
   let center;
   let placeName = spec.title;
   let countryName = spec.subtitle;
-  if (Array.isArray(spec.center)) {
-    center = spec.center.map(Number);
+  if (spec.center != null) {
+    if (!Array.isArray(spec.center) || spec.center.length !== 2) throw new SpecError("center must be [longitude, latitude].");
+    const loc = resolveLocation(spec.center);
+    center = [loc.lon, loc.lat];
     report.resolved.push({ ref: JSON.stringify(spec.center), as: "coordinates", lon: center[0], lat: center[1] });
   } else if (spec.place) {
     const loc = resolveLocation({ place: spec.place, country: spec.country });
@@ -35,7 +37,14 @@ export async function renderPoster(spec, { base = process.cwd(), embedFonts: emb
     placeName ??= loc.label;
     countryName ??= loc.country ? findCountry(loc.country)?.name : undefined;
   } else throw new SpecError('A poster needs "place" (a city from the gazetteer) or "center": [lon, lat].');
-  if (spec.offset) center = [center[0] + (spec.offset[0] ?? 0), center[1] + (spec.offset[1] ?? 0)];
+  if (spec.offset != null) {
+    if (!Array.isArray(spec.offset) || spec.offset.length !== 2 || !spec.offset.every((v) => typeof v === "number" && Number.isFinite(v))) {
+      throw new SpecError("offset must be two numbers: [dLon, dLat].");
+    }
+    center = [center[0] + spec.offset[0], center[1] + spec.offset[1]];
+  }
+  resolveLocation(center);
+  if (Math.abs(center[1]) >= 90) throw new SpecError("Poster latitude must be between -90 and 90, excluding the poles.");
   placeName ??= "";
 
   // Frame: radiusKm is half the poster's width on the ground.
@@ -142,7 +151,7 @@ export async function renderPoster(spec, { base = process.cwd(), embedFonts: emb
   if (spec.coords !== false) {
     furniture.push(`<text x="${W / 2}" y="${n(baseY + 112 * u)}" text-anchor="middle" font-family="${esc(theme.mono)}" font-size="${n(15 * u)}" font-weight="400" letter-spacing="${n(1.5 * u)}" fill="${theme.muted}">${esc(formatCoords(center[0], center[1]))}</text>`);
   }
-  furniture.push(`<text x="${n(W - 24 * u)}" y="${n(H - 20 * u)}" text-anchor="end" font-family="${esc(theme.mono)}" font-size="${n(10 * u)}" fill="${theme.muted}" fill-opacity="0.8">© OpenStreetMap contributors</text>`);
+  furniture.push(`<text x="${n(W - 24 * u)}" y="${n(H - 20 * u)}" text-anchor="end" font-family="${esc(theme.mono)}" font-size="${n(10 * u)}" fill="${theme.muted}" fill-opacity="0.8">© OpenStreetMap contributors · https://www.openstreetmap.org/copyright</text>`);
 
   let svg = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`Street map of ${placeName}`)}">`,

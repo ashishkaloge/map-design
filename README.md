@@ -1,6 +1,6 @@
 <h1 align="center">Map Design</h1>
 
-<p align="center"><b>Your coding agent can't draw a coastline. With this skill it doesn't have to.</b></p>
+<p align="center"><b>Your coding agent cannot draw a coastline. With this skill it does not have to.</b></p>
 
 <p align="center">
 An agent skill that turns "poster of Lisbon in azulejo blue" or "map this CSV by state"<br>
@@ -19,6 +19,8 @@ Real borders, coastlines and coordinates. No API keys. No runtime dependencies.
 <p align="center">
   <img src="docs/assets/hero.webp" width="920" alt="Six maps made with the skill: posters of Lisbon in cobalt on white, San Francisco in white on black, Tokyo in ink on paper and Manhattan in blueprint blue, a map of US population change by state from 2020 to 2024, and an antique-style map of the voyage of HMS Beagle.">
 </p>
+
+<p align="center"><sub>Street poster data: <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a> (ODbL).</sub></p>
 
 <p align="center"><code>npx skills add incline-ltd/map-design</code></p>
 
@@ -80,6 +82,7 @@ Things a model gets wrong from memory and this skill gets right:
 ## Gallery
 
 Every map below is real data, rendered by the skill from the spec it links to.
+Street posters use [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright) data (ODbL).
 
 <table>
   <tr>

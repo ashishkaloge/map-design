@@ -30,6 +30,22 @@ test("raw counts trigger a normalization note", async () => {
   assert.ok(r.report.notes.some((n) => /raw count/.test(n)));
 });
 
+test("missing numeric values stay uncolored while a real zero is retained", async () => {
+  const data = [
+    { country: "Chile", v: 0 }, { country: "France", v: null },
+    { country: "Germany", v: "" }, { country: "Spain" }, { country: "Italy", v: " $ " },
+  ];
+  for (const scale of [undefined, { type: "continuous" }]) {
+    const r = await render({ kind: "choropleth", value: "v", scale, data }, opts);
+    assert.equal(count(r.svg, /data-name=/g), 1);
+    assert.match(r.svg, /data-name="Chile" data-value="0"/);
+    assert.ok(r.report.warnings.some((w) => /4 row\(s\) have no numeric/.test(w)));
+  }
+  const r = await render({ kind: "bubbles", value: "v", data }, opts);
+  assert.equal(count(r.svg, /<circle [^>]*data-name/g), 1);
+  assert.match(r.svg, /data-name="Chile" data-value="0"/);
+});
+
 test("US states and counties", async () => {
   const s = await render({ kind: "choropleth", region: "usa", value: "v", data: [{ state: "TX", v: 1 }, { state: "CA", v: 2 }, { state: "New York", v: 3 }] }, opts);
   assert.equal(count(s.svg, /data-name=/g), 3);
@@ -48,6 +64,35 @@ test("bubbles locate places and label the largest", async () => {
   assert.equal(count(r.svg, /<circle [^>]*data-name/g), 3);
   assert.equal(r.report.resolved.length, 3);
   assert.match(r.svg, />Tokyo</);
+});
+
+test("bubbles support a continuous color legend", async () => {
+  const r = await render({
+    kind: "bubbles", value: "v", color: { field: "c", scale: { type: "continuous" } },
+    data: [{ place: "Paris", v: 1, c: 2 }, { place: "Berlin", v: 2, c: 4 }],
+  }, opts);
+  assert.equal(count(r.svg, /<circle [^>]*data-name/g), 2);
+  assert.match(r.svg, /<linearGradient/);
+  assert.doesNotMatch(r.svg, /NaN|Infinity/);
+});
+
+test("numeric bubble colors distinguish missing values from zero", async () => {
+  const data = [
+    { lon: 2, lat: 48, label: "Zero", v: 1, c: 0 },
+    { lon: 13, lat: 52, label: "Ten", v: 1, c: 10 },
+    { lon: 12, lat: 42, label: "Null", v: 1, c: null },
+    { lon: -3, lat: 40, label: "Empty", v: 1, c: "" },
+    { lon: 10, lat: 55, label: "Absent", v: 1 },
+  ];
+  for (const scale of [undefined, { type: "continuous" }]) {
+    const r = await render({ kind: "bubbles", value: "v", color: { field: "c", scale }, data }, opts);
+    const fill = (label) => r.svg.match(new RegExp(`<circle [^>]*data-name="${label}"[^>]*>`))?.[0].match(/fill="([^"]+)"/)[1];
+    assert.equal(count(r.svg, /<circle [^>]*data-name/g), data.length);
+    assert.notEqual(fill("Zero"), r.theme.faint);
+    for (const label of ["Null", "Empty", "Absent"]) assert.equal(fill(label), r.theme.faint);
+    assert.ok(r.report.warnings.some((w) => /3 row\(s\) have no numeric "c"/.test(w)));
+    assert.doesNotMatch(r.svg, /NaN|Infinity/);
+  }
 });
 
 test("spikes, points, flows and locator render", async () => {
@@ -75,6 +120,18 @@ test("routes measure great-circle length and support waypoints", async () => {
 test("polar flights widen the world crop", async () => {
   const r = await render({ kind: "flows", mode: "flight", region: "world", flows: [{ from: "SIN", to: "JFK", value: 1 }] }, opts);
   assert.ok(r.svg.length > 1000);
+});
+
+test("flows omit missing and non-positive volumes without invalid geometry", async () => {
+  const flows = [{ from: "Paris", to: "Berlin", value: 5 }, ...[0, -1, null, "", undefined].map((value) => ({ from: "Narnia", to: "Atlantis", value }))];
+  const r = await render({ kind: "flows", flows }, opts);
+  assert.equal(r.report.resolved.length, 2);
+  assert.equal(r.report.unmatched.length, 0);
+  assert.equal(r.report.warnings.length, 5);
+  assert.doesNotMatch(r.svg, /NaN|Infinity|stroke-width="-/);
+  for (const value of [0, -1, null, "", undefined]) {
+    await assert.rejects(render({ kind: "flows", flows: [{ from: "Paris", to: "Berlin", value }] }, opts), /No flows could be drawn/);
+  }
 });
 
 test("annotations and themes", async () => {
@@ -113,6 +170,34 @@ test("colors and dashes cannot inject markup", async () => {
   await assert.rejects(render({ kind: "choropleth", value: "v", scale: { type: "categorical", colors: { a: "url(javascript:x)" } }, data: [{ country: "Chile", v: "a" }] }, opts), /must be colors/);
   const r = await render({ kind: "points", data: [{ place: "Oslo", label: '<script>alert(1)</script>' }], label: "label" }, opts);
   assert.doesNotMatch(r.svg, /<script>/);
+});
+
+test("opacity must be numeric and cannot inject markup", async () => {
+  for (const spec of [
+    { kind: "bubbles", value: "v", data: [{ place: "Oslo", v: 1 }] },
+    { kind: "locator", highlight: "Bhutan" },
+  ]) {
+    for (const opacity of ['0.5"/><script>alert(1)</script><circle fill-opacity="0.5', "0.5", -0.1, 1.1]) {
+      await assert.rejects(render({ ...spec, opacity }, opts), /opacity must be a number between 0 and 1/);
+    }
+    for (const opacity of [0, 1]) {
+      const r = await render({ ...spec, opacity }, opts);
+      assert.match(r.svg, new RegExp(`fill-opacity="${opacity}"`));
+    }
+  }
+});
+
+test("poster check rejects invalid coordinates and offsets before downloading", async () => {
+  const base = { kind: "poster", center: [10, 50], radiusKm: 1 };
+  const check = { ...opts, check: true };
+  for (const center of [[10], [10, 50, 1], [10, "bad"], [10, null], [181, 50], [10, 95], [10, 90], [10, -90]]) {
+    await assert.rejects(render({ ...base, center }, check), /center must be|Could not locate|excluding the poles/);
+  }
+  for (const offset of [[1], [0, "1"], [171, 0], [0, 45]]) {
+    await assert.rejects(render({ ...base, offset }, check), /offset must be|Could not locate/);
+  }
+  const r = await render({ ...base, offset: [0.1, -0.1] }, check);
+  assert.doesNotMatch(r.report.notes.join(" "), /NaN|Infinity/);
 });
 
 test("posters take labeled pins, at the center or at a location", async () => {

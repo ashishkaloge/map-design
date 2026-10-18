@@ -50,7 +50,8 @@ export function numeric(rows, field, ctx, kind) {
   let bad = 0;
   const values = rows.map((r) => {
     const raw = r.row ? r.row[field] : r[field];
-    const v = typeof raw === "number" ? raw : Number(String(raw ?? "").replace(/[,%$€£\s]/g, ""));
+    const cleaned = typeof raw === "number" ? raw : String(raw ?? "").replace(/[,%$€£\s]/g, "");
+    const v = cleaned === "" ? NaN : Number(cleaned);
     if (!Number.isFinite(v)) bad++;
     return v;
   });

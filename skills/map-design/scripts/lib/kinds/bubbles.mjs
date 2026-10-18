@@ -1,6 +1,6 @@
 // Proportional symbols: circles sized by area, or spikes sized by height.
 import { radiusScale, linearScale, colorScale } from "../scales.mjs";
-import { sizeLegend, legendValues, categoricalLegend, classedLegend } from "../layout.mjs";
+import { sizeLegend, legendValues, categoricalLegend, classedLegend, continuousLegend } from "../layout.mjs";
 import { SpecError } from "../errors.mjs";
 import { esc, n, formatNumber } from "../svg.mjs";
 import { locateRows, numeric, project, symbolLabels, tooltip } from "./common.mjs";
@@ -23,11 +23,16 @@ export function prepare(ctx) {
   if (spec.color && typeof spec.color === "object") {
     const field = spec.color.field;
     const raw = items.map((d) => d.row[field]);
-    const scale = colorScale(raw.map((v) => (spec.color.scale?.type === "categorical" || typeof v === "string" ? v : Number(v))), { type: typeof raw[0] === "string" ? "categorical" : undefined, ...(spec.color.scale ?? {}) }, theme);
-    colorOf = (d) => scale.color(scale.type === "categorical" ? d.row[field] : Number(d.row[field])) ?? theme.faint;
+    const scaleSpec = { type: typeof raw[0] === "string" ? "categorical" : undefined, ...(spec.color.scale ?? {}) };
+    const values = scaleSpec.type === "categorical" ? raw : numeric(items, field, ctx, "color encoding");
+    items.forEach((d, i) => (d.colorValue = values[i]));
+    const scale = colorScale(values, scaleSpec, theme);
+    colorOf = (d) => scale.color(d.colorValue) ?? theme.faint;
     colorLegend = scale.type === "categorical"
       ? categoricalLegend({ items: scale.categories.map((c) => ({ label: c, color: scale.color(c) })), theme, title: spec.color.title, shape: "circle" })
-      : classedLegend({ scale, theme, title: spec.color.title, format: spec.color.format ?? {} });
+      : scale.type === "continuous"
+        ? continuousLegend({ scale, theme, title: spec.color.title, format: spec.color.format ?? {} })
+        : classedLegend({ scale, theme, title: spec.color.title, format: spec.color.format ?? {} });
   }
 
   const legendTitle = spec.legend?.title ?? null;

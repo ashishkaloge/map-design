@@ -58,14 +58,19 @@ export function prepare(ctx) {
     return nodes.get(key);
   };
   for (const [i, r] of rows.entries()) {
-    const a = locate(r.from ?? r.origin ?? r.source, i);
-    const b = locate(r.to ?? r.destination ?? r.target, i);
-    const v = Number(r[value]);
-    if (!a || !b) continue;
+    const raw = r[value];
+    const v = raw == null || (typeof raw === "string" && raw.trim() === "") ? NaN : Number(raw);
     if (!Number.isFinite(v)) {
       ctx.report.warnings.push(`Flow row ${i + 1} has no numeric "${value}".`);
       continue;
     }
+    if (v <= 0) {
+      ctx.report.warnings.push(`Flow row ${i + 1} has a non-positive "${value}" and is left out.`);
+      continue;
+    }
+    const a = locate(r.from ?? r.origin ?? r.source, i);
+    const b = locate(r.to ?? r.destination ?? r.target, i);
+    if (!a || !b) continue;
     a.total += v;
     b.total += v;
     flows.push({ a, b, v, row: r });

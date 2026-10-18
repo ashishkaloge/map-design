@@ -106,7 +106,7 @@ export function colorScale(values, scale = {}, theme) {
       const span = Math.max(Math.abs(hi - c), Math.abs(lo - c)) || 1;
       at = (v) => 0.5 + (v - c) / (2 * span);
     }
-    return { type, stops, min: lo, max: hi, color: (v) => rampAt(stops, at(v)), diverging };
+    return { type, stops, min: lo, max: hi, color: (v) => Number.isFinite(v) ? rampAt(stops, at(v)) : null, diverging };
   }
 
   let breaks;

@@ -45,6 +45,9 @@ export function validate(spec) {
   if (!spec || typeof spec !== "object") throw new SpecError("The spec must be a JSON object.");
   if (!spec.kind) throw new SpecError(`Missing "kind". Use one of: ${KINDS.join(", ")}.`);
   if (!KINDS.includes(spec.kind)) throw new SpecError(`Unknown kind "${spec.kind}". Use one of: ${KINDS.join(", ")}.`);
+  if (spec.opacity != null && (typeof spec.opacity !== "number" || !Number.isFinite(spec.opacity) || spec.opacity < 0 || spec.opacity > 1)) {
+    throw new SpecError("opacity must be a number between 0 and 1.");
+  }
   checkAttributes(spec);
   if (Array.isArray(spec.routes)) spec.routes.forEach((r, i) => checkAttributes({ color: r.color, dash: r.dash }, `spec.routes[${i}]`));
   return spec;
