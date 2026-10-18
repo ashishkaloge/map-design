@@ -35,6 +35,9 @@ Commands
       --country <c>    Disambiguate the place
       --theme <name>   ${Object.keys(POSTER).join(", ")}
       --radius <km>    Half-width of the map in km (default 4)
+      --lat, --lon     Center on coordinates instead of a gazetteer place
+      --title <text>   City line on the poster (also names the files)
+      --osm <file>     Use a saved Overpass JSON export instead of downloading
       --out <path>     Output path without extension
   themes               List themes, palettes, projections and sizes
 
@@ -142,9 +145,10 @@ async function main() {
       title: args.title,
       subtitle: args.subtitle,
       detail: args.detail,
+      osm: args.osm,
     };
     if (!spec.place && !spec.center) throw new SpecError("poster needs --place <name> or --lat and --lon.");
-    const name = (args.place ?? "poster").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const name = String(args.title ?? args.place ?? "poster").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "poster";
     const outBase = resolve(args.out ? args.out.replace(/\.(svg|html|png)$/i, "") : `${name}-${spec.theme ?? "noir"}`);
     await doRender(spec, process.cwd(), outBase, args);
     return;

@@ -42,3 +42,11 @@ test("find and themes", () => {
   assert.match(run("themes").stdout, /azulejo/);
   assert.match(run("--help").stdout, /Commands/);
 });
+
+test("posters are named after the title when there is no place", () => {
+  const dir = mkdtempSync(join(tmpdir(), "map-design-test-"));
+  const fixture = join(dirname(fileURLToPath(import.meta.url)), "fixtures/mini-osm.json");
+  const r = spawnSync(process.execPath, [cli, "poster", "--lat", "50", "--lon", "10", "--title", "Juhu Beach", "--radius", "1", "--osm", fixture, "--no-png"], { encoding: "utf8", cwd: dir });
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(existsSync(join(dir, "juhu-beach-noir.svg")));
+});
