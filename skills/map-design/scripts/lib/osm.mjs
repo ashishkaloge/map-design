@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { SpecError } from "./errors.mjs";
 
 const ENDPOINTS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter"];
-const USER_AGENT = "map-design/0.1 (+https://github.com/incline-ltd/map-design)";
+const USER_AGENT = "map-design/0.1 (+https://github.com/ashishkaloge/map-design)";
 
 const ROADS = {
   low: "motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link",

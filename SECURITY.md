@@ -6,7 +6,7 @@ The latest 0.1.x release and the latest commit on `main` receive fixes.
 
 ## Report a vulnerability
 
-Use [GitHub private vulnerability reporting](https://github.com/incline-ltd/map-design/security/advisories/new).
+Use [GitHub private vulnerability reporting](https://github.com/ashishkaloge/map-design/security/advisories/new).
 Do not put exploit details in a public issue.
 
 Useful reports include:
