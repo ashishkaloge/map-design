@@ -17,11 +17,17 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { SpecError } from "./errors.mjs";
+
+/** A dark basemap from the keyless OSM tiles, for dark themes. */
+export const DARK_FILTER = "invert(1) hue-rotate(180deg) brightness(0.9) saturate(0.55)";
 
 /** Tile sources. `url` takes {z}/{x}/{y}; attribution is printed in the footer.
  *  Keyless sources are listed first: the CARTO ones answer HTTP 200 with a
  *  watermarked "API KEY REQUIRED" tile when no key is supplied, which fails
- *  silently and is worse than an error, so they say so here. */
+ *  silently and is worse than an error, so they say so here.
+ *  `osm-dark` is internal: the standard OSM tiles recoloured with DARK_FILTER,
+ *  which is what the documented `dark` alias resolves to. */
 export const PRESETS = {
   osm: {
     url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -32,6 +38,12 @@ export const PRESETS = {
     url: "https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
     attribution: "© OpenStreetMap contributors, tiles by HOT",
     maxZoom: 19,
+  },
+  "osm-dark": {
+    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: "© OpenStreetMap contributors",
+    maxZoom: 19,
+    filter: DARK_FILTER,
   },
   "carto-light": {
     url: "https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
@@ -53,36 +65,122 @@ export const PRESETS = {
   },
 };
 
-/** A dark basemap from the keyless OSM tiles, for dark themes. */
-export const DARK_FILTER = "invert(1) hue-rotate(180deg) brightness(0.9) saturate(0.55)";
+/** Documented short names. `light` is the standard OSM style; `dark` is the
+ *  keyless inverted-OSM recipe from SKILL.md. `voyager` has no keyless
+ *  equivalent, so it maps to the CARTO preset and keeps its API-key warning. */
+const ALIASES = { light: "osm", dark: "osm-dark", voyager: "carto-voyager" };
+
+/** Names a spec may use, for error messages (internal presets stay hidden). */
+const PUBLIC_PRESETS = ["osm", "osm-hot", "light", "dark", "voyager", "carto-light", "carto-dark", "carto-voyager"];
 
 const UA = "map-design/0.1 (agent skill; +https://github.com/incline-ltd/map-design)";
 const MAX_LAT = 85.05112878;
+
+// Fetch bounds: a 256 px PNG tile is tens of KB, so 2 MB is generous, and a
+// public tile server that has not answered in 10 s is not going to.
+const FETCH_TIMEOUT_MS = 10_000;
+const MAX_TILE_BYTES = 2 * 1024 * 1024;
+
+// Absolute ceilings for the numeric knobs. Presets cap zoom lower (19/20);
+// 25 is the practical slippy-map ceiling. The tile budget is what keeps a
+// render polite, so it gets a hard ceiling too, whatever the spec asks for.
+const MAX_ZOOM_ABS = 25;
+const MAX_TILES_ABS = 4096;
+
+/** Plain CSS filter functions with one numeric argument, e.g.
+ *  "saturate(0.6) brightness(0.72)". No url(), no drop-shadow, nothing that
+ *  could carry markup into the SVG attribute the filter lands in. */
+const SAFE_FILTER = /^([a-z-]+\(\s*[\d.]+\s*(%|deg|px|rad|turn)?\s*\)\s*)+$/i;
+
+/** Bounded integer knob: present-but-wrong is a spec error, not a surprise. */
+function boundedInt(value, name, lo, hi) {
+  if (value == null) return null;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < lo || value > hi) {
+    throw new SpecError(`basemap.${name} must be an integer between ${lo} and ${hi}, got ${JSON.stringify(value)}.`);
+  }
+  return value;
+}
 
 /**
  * Normalise spec.basemap.
  *   true | "osm"        -> that preset
  *   { preset: "dark" }  -> a preset plus overrides
+ * Invalid values (unknown preset, out-of-range zoom or budgets, an opacity
+ * outside 0-1, a filter that is not plain CSS filter functions, a url without
+ * {z}/{x}/{y}) throw a SpecError. Non-fatal adjustments (a zoom clamped to the
+ * preset's maxZoom, a custom url without attribution) come back in `warnings`.
  * Returns null when no basemap was asked for.
  */
 export function resolveBasemap(basemap) {
-  if (!basemap) return null;
+  if (basemap == null || basemap === false) return null;
   if (basemap === true) basemap = "osm";
+  if (typeof basemap !== "string" && (typeof basemap !== "object" || Array.isArray(basemap))) {
+    throw new SpecError(`basemap must be true, a preset name, or an object, got ${JSON.stringify(basemap)}.`);
+  }
   const cfg = typeof basemap === "string" ? { preset: basemap } : { ...basemap };
-  const preset = PRESETS[cfg.preset ?? "osm"] ?? PRESETS.osm;
+  const warnings = [];
+
+  if (cfg.preset != null && typeof cfg.preset !== "string") {
+    throw new SpecError(`basemap.preset must be a string, got ${JSON.stringify(cfg.preset)}.`);
+  }
+  const askedName = cfg.preset ?? "osm";
+  const presetName = ALIASES[askedName] ?? askedName;
+  const preset = PRESETS[presetName];
+  if (!preset) {
+    throw new SpecError(
+      `unknown basemap preset ${JSON.stringify(askedName)}. Use one of: ${PUBLIC_PRESETS.join(", ")} — or pass { url, attribution } for your own server.`
+    );
+  }
+
+  if (cfg.url != null) {
+    if (typeof cfg.url !== "string" || !/^https?:\/\//i.test(cfg.url)) {
+      throw new SpecError(`basemap.url must be an http(s) URL with {z}/{x}/{y} placeholders, got ${JSON.stringify(cfg.url)}.`);
+    }
+    for (const p of ["{z}", "{x}", "{y}"]) {
+      if (!cfg.url.includes(p)) throw new SpecError(`basemap.url must contain the ${p} placeholder, got ${JSON.stringify(cfg.url)}.`);
+    }
+  }
+  if (cfg.attribution != null && typeof cfg.attribution !== "string") {
+    throw new SpecError(`basemap.attribution must be a string, got ${JSON.stringify(cfg.attribution)}.`);
+  }
+  if (cfg.url && !cfg.attribution) {
+    warnings.push("custom basemap url without attribution — most tile providers require a visible credit");
+  }
+
+  const maxTiles = boundedInt(cfg.maxTiles, "maxTiles", 1, MAX_TILES_ABS) ?? 144;
+  const maxZoom = boundedInt(cfg.maxZoom, "maxZoom", 0, MAX_ZOOM_ABS) ?? preset.maxZoom ?? 19;
+  let zoom = boundedInt(cfg.zoom, "zoom", 0, MAX_ZOOM_ABS);
+  if (zoom != null && zoom > maxZoom) {
+    warnings.push(`zoom ${zoom} is above this preset's maxZoom ${maxZoom} — clamped to ${maxZoom}`);
+    zoom = maxZoom;
+  }
+
+  if (cfg.opacity != null && (typeof cfg.opacity !== "number" || !Number.isFinite(cfg.opacity) || cfg.opacity < 0 || cfg.opacity > 1)) {
+    throw new SpecError(`basemap.opacity must be a number between 0 and 1, got ${JSON.stringify(cfg.opacity)}.`);
+  }
+  if (cfg.filter != null && (typeof cfg.filter !== "string" || !SAFE_FILTER.test(cfg.filter.trim()))) {
+    throw new SpecError(
+      `basemap.filter must be plain CSS filter functions like "saturate(0.6) brightness(0.72)" — no url(), no drop-shadow — got ${JSON.stringify(cfg.filter)}.`
+    );
+  }
+  if (cfg.cache != null && typeof cfg.cache !== "boolean") {
+    throw new SpecError(`basemap.cache must be true or false, got ${JSON.stringify(cfg.cache)}.`);
+  }
+
   return {
     url: cfg.url ?? preset.url,
     attribution: cfg.attribution ?? preset.attribution,
-    maxZoom: cfg.maxZoom ?? preset.maxZoom ?? 19,
-    maxTiles: cfg.maxTiles ?? 144,
+    maxZoom,
+    maxTiles,
     // A preset that needs a key but was not overridden with a keyed url will serve
     // watermarked tiles at HTTP 200. Say so rather than ship a broken basemap.
     requiresKey: !cfg.url && preset.requiresKey === true,
-    presetName: cfg.preset ?? "osm",
-    zoom: cfg.zoom ?? null,
+    presetName: askedName,
+    zoom,
     opacity: cfg.opacity ?? 1,
-    filter: cfg.filter ?? null,
+    filter: cfg.filter ?? preset.filter ?? null,
     cache: cfg.cache !== false,
+    warnings,
   };
 }
 
@@ -146,16 +244,36 @@ function cacheDir() {
   return path.join(xdg, "map-design", "tiles");
 }
 
+/** Read a response body, giving up past maxBytes. Returns null when oversized. */
+async function readCapped(res, maxBytes) {
+  const reader = res.body.getReader();
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks);
+}
+
 /** Fetch one tile as a data URI, using the on-disk cache. Never throws.
- *  Public tile servers answer 429/5xx under load; a missing tile leaves a hole in
- *  the map, so retry a few times with backoff before giving up. */
-export async function defaultFetchTile(url, { cache = true } = {}) {
+ *  Bounded: each attempt gives up after `timeoutMs`, and a body larger than
+ *  `maxBytes` is rejected. Public tile servers answer 429/5xx under load; a
+ *  missing tile leaves a hole in the map, so retry a few times with backoff
+ *  before giving up. */
+export async function defaultFetchTile(url, { cache = true, timeoutMs = FETCH_TIMEOUT_MS, maxBytes = MAX_TILE_BYTES } = {}) {
   const key = createHash("sha1").update(url).digest("hex");
   const file = path.join(cacheDir(), `${key}.png`);
   if (cache) {
     try {
       const buf = await fs.readFile(file);
-      if (buf.length > 64) return { data: buf.toString("base64"), cached: true };
+      if (buf.length > 64 && buf.length <= maxBytes) return { data: buf.toString("base64"), cached: true };
     } catch {
       /* not cached yet */
     }
@@ -164,13 +282,25 @@ export async function defaultFetchTile(url, { cache = true } = {}) {
   for (const wait of [0, 500, 1500]) {
     if (wait) await new Promise((r) => setTimeout(r, wait));
     try {
-      const res = await fetch(url, { headers: { "user-agent": UA, accept: "image/png,image/*" } });
+      const res = await fetch(url, {
+        headers: { "user-agent": UA, accept: "image/png,image/*" },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
       if (!res.ok) {
         lastError = `HTTP ${res.status}`;
         if (res.status === 404) break; // genuinely absent, don't hammer
         continue;
       }
-      const buf = Buffer.from(await res.arrayBuffer());
+      const declared = Number(res.headers.get("content-length") ?? 0);
+      if (declared > maxBytes) {
+        lastError = `tile over the ${maxBytes}-byte cap`;
+        break; // it will not shrink on a retry
+      }
+      const buf = await readCapped(res, maxBytes);
+      if (!buf) {
+        lastError = `tile over the ${maxBytes}-byte cap`;
+        break;
+      }
       if (buf.length < 64) {
         lastError = "empty tile";
         continue;
@@ -181,7 +311,7 @@ export async function defaultFetchTile(url, { cache = true } = {}) {
       }
       return { data: buf.toString("base64"), cached: false };
     } catch (err) {
-      lastError = String(err?.message ?? err);
+      lastError = err?.name === "TimeoutError" ? `timeout after ${timeoutMs}ms` : String(err?.message ?? err);
     }
   }
   return { error: lastError };
@@ -198,8 +328,14 @@ const num = (v) => (Math.round(v * 100) / 100).toString();
 export async function rasterBasemap({ spec, projection, rect, fetchTile = defaultFetchTile }) {
   const cfg = resolveBasemap(spec.basemap);
   if (!cfg) return null;
+  const warnings = [...cfg.warnings];
+  if (cfg.requiresKey) {
+    warnings.push(
+      `preset "${cfg.presetName}" needs an API key and returns watermarked tiles without one — pass a keyed url or use "osm"`
+    );
+  }
   if (typeof projection?.invert !== "function") {
-    return { images: [], attribution: cfg.attribution, error: "projection has no invert()" };
+    return { images: [], attribution: cfg.attribution, warnings, error: "projection has no invert()" };
   }
 
   // What part of the world does the frame actually show?
@@ -209,7 +345,7 @@ export async function rasterBasemap({ spec, projection, rect, fetchTile = defaul
     projection.invert([rect[0][0], rect[1][1]]),
     projection.invert([rect[1][0], rect[1][1]]),
   ].filter((c) => c && Number.isFinite(c[0]) && Number.isFinite(c[1]));
-  if (corners.length < 4) return { images: [], attribution: cfg.attribution, error: "cannot invert the frame" };
+  if (corners.length < 4) return { images: [], attribution: cfg.attribution, warnings, error: "cannot invert the frame" };
 
   const lons = corners.map((c) => c[0]);
   const lats = corners.map((c) => c[1]);
@@ -220,10 +356,27 @@ export async function rasterBasemap({ spec, projection, rect, fetchTile = defaul
     north: Math.min(MAX_LAT, Math.max(...lats)),
   };
   if (!(box.east > box.west) || !(box.north > box.south)) {
-    return { images: [], attribution: cfg.attribution, error: "empty frame" };
+    return { images: [], attribution: cfg.attribution, warnings, error: "empty frame" };
   }
 
-  const chosen = cfg.zoom ? { zoom: cfg.zoom, range: tileRange(box, cfg.zoom) } : chooseZoom(box, { ...cfg, projection });
+  // The tile budget always wins. An explicit zoom that would blow it is a spec
+  // mistake, not a licence to fetch thousands of tiles: warn and pick the
+  // highest zoom the budget allows, as if no zoom had been given.
+  let chosen;
+  if (cfg.zoom != null) {
+    const range = tileRange(box, cfg.zoom);
+    const count = (range.x1 - range.x0 + 1) * (range.y1 - range.y0 + 1);
+    if (count > cfg.maxTiles) {
+      warnings.push(
+        `zoom ${cfg.zoom} would need ${count} tiles here — over the maxTiles budget (${cfg.maxTiles}); chose a zoom that fits the budget instead`
+      );
+      chosen = chooseZoom(box, { ...cfg, projection });
+    } else {
+      chosen = { zoom: cfg.zoom, range, count, stretch: null };
+    }
+  } else {
+    chosen = chooseZoom(box, { ...cfg, projection });
+  }
   const { zoom, range } = chosen;
   if (process.env.MAP_DESIGN_DEBUG_TILES) {
     const a = projection([tileToLonLat(range.x0, range.y0, zoom).lon, tileToLonLat(range.x0, range.y0, zoom).lat]);
@@ -258,8 +411,9 @@ export async function rasterBasemap({ spec, projection, rect, fetchTile = defaul
   const images = [];
   let delivered = 0;
   const failures = [];
-  const filter = cfg.filter ?? "none";
-  const style = `opacity:${cfg.opacity}` + (filter !== "none" ? `;filter:${filter}` : "");
+  // Both values are validated in resolveBasemap: opacity is a number in 0-1 and
+  // filter is plain CSS filter functions, so they serialize safely into the style.
+  const style = `opacity:${num(cfg.opacity)}` + (cfg.filter ? `;filter:${cfg.filter.trim()}` : "");
   for (const r of results) {
     if (!r?.data) {
       if (r?.error) failures.push(`${r.x}/${r.y}: ${r.error}`);
@@ -290,9 +444,7 @@ export async function rasterBasemap({ spec, projection, rect, fetchTile = defaul
     tiles: delivered,
     requested: jobs.length,
     failures,
-    warning: cfg.requiresKey
-      ? `basemap preset "${cfg.presetName}" needs an API key and returns watermarked tiles without one — pass a keyed url or use "osm"`
-      : null,
+    warnings,
     error: images.length ? null : failures[0] ?? "no tiles",
   };
 }

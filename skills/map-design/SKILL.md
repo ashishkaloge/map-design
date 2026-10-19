@@ -102,22 +102,35 @@ needs real streets under the data, ask for raster tiles:
   "region": { "center": [12.55, 55.68], "radiusKm": 6 } }
 ```
 
-- Keyless presets: `osm`, `osm-hot`. CARTO presets (`carto-light`, `carto-dark`, `carto-voyager`) need an API key —
-  without one they answer HTTP 200 with a watermarked tile, so the report warns rather than shipping it silently.
-  Or point at your own server: `{ "url": "https://…/{z}/{x}/{y}.png", "attribution": "…" }`.
-- For a dark basemap on a dark theme without a key, invert the OSM tiles:
-  `{ "preset": "osm", "filter": "invert(1) hue-rotate(180deg) brightness(0.9) saturate(0.55)" }`.
+- Presets: `osm` and `osm-hot` are keyless. The aliases `light` (= `osm`) and `dark` (keyless: OSM tiles inverted
+  with the filter below) resolve to real styles. `voyager` and the CARTO presets (`carto-light`, `carto-dark`,
+  `carto-voyager`) need an API key — without one they answer HTTP 200 with a watermarked tile, so the report warns
+  rather than shipping it silently. An unknown preset name is a spec error, not a silent fallback.
+  Or point at your own server: `{ "url": "https://…/{z}/{x}/{y}.png", "attribution": "…" }` — the URL must carry all
+  three placeholders, and skipping `attribution` earns a warning, because providers require the credit.
+- For a dark basemap on a dark theme without a key, use `"basemap": "dark"` — the OSM tiles with
+  `invert(1) hue-rotate(180deg) brightness(0.9) saturate(0.55)` applied.
 - The projection is forced to `mercator` — tiles are Web Mercator squares and shear under anything else. The
   report says when that happened.
 - Zoom is chosen automatically: the highest zoom that fits `maxTiles` (default 144) without stretching a tile past
   1.5× its native 256 px. Override with `"zoom": 15`, or raise the budget (`"maxTiles": 400`) for a one-off city print.
-  `MAP_DESIGN_DEBUG_TILES=1` prints the tile budget and the chosen zoom for every render.
+  `zoom`, `maxZoom` and `maxTiles` must be bounded integers (`maxTiles` ≤ 4096; `zoom` is clamped to the preset's
+  `maxZoom` with a warning), and the budget always wins: an explicit `zoom` that would exceed `maxTiles` is reported
+  and replaced by the highest zoom that fits. `MAP_DESIGN_DEBUG_TILES=1` prints the tile budget and the chosen zoom
+  for every render.
 - `filter` / `opacity` let the imagery sit under data: `{ "preset": "dark", "filter": "saturate(0.6) brightness(0.72)" }`.
+  `opacity` is a number from 0 to 1; `filter` accepts plain CSS filter functions only (no `url()`, no `drop-shadow`) —
+  anything else is a spec error, so nothing unvetted reaches the SVG.
 - Tiles are embedded as data URIs, so HTML and SVG stay self-contained, and cached in
   `$XDG_CACHE_HOME/map-design/tiles` (`MAP_DESIGN_TILE_CACHE` overrides), so re-renders cost nothing.
 - Tiles that fail are retried with backoff; anything still missing is reported (a gap in the imagery is visible,
   so it must never be silent). If every tile fails the map keeps the vector geography and the report says why.
-- Respect the host's tile policy. For bulk work, point `url` at your own tile server or a keyed provider.
+- Provider terms. `osm`/`osm-hot` credit "© OpenStreetMap contributors" (printed in the footer automatically) and
+  follow the OSM tile usage policy (https://operations.osmfoundation.org/policies/tiles/): visible attribution, no
+  bulk downloading — keep `cache` on, and point `url` at your own tile server or a keyed provider for heavy work.
+  The CARTO presets credit "© OpenStreetMap contributors © CARTO" and need a key (https://carto.com/basemaps/).
+  Exports: tiles are embedded as data URIs and the attribution prints in the footer, so HTML, SVG and PNG all carry
+  the required credit. That covers finished maps; no preset permits redistributing the raw tiles themselves.
 
 ## Design rules
 

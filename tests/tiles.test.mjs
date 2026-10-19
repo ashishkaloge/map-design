@@ -6,12 +6,15 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 import { render } from "../skills/map-design/scripts/lib/render.mjs";
+import http from "node:http";
 import {
   resolveBasemap,
   lonLatToTile,
   tileToLonLat,
   tileRange,
   chooseZoom,
+  defaultFetchTile,
+  DARK_FILTER,
   PRESETS,
 } from "../skills/map-design/scripts/lib/tiles.mjs";
 
@@ -192,4 +195,180 @@ test("rendered tiles are all the same size and tile the frame", async () => {
       assert.ok(gap < 1.5 && gap > -3, `gap of ${gap.toFixed(2)} px in row y=${y}`);
     }
   }
+});
+
+// --- Regression: validation, budget enforcement and fetch bounds (review on PR #1) ---
+
+test("documented aliases resolve to real styles", () => {
+  const light = resolveBasemap("light");
+  assert.equal(light.url, PRESETS.osm.url, "light is the standard OSM style");
+  assert.equal(light.requiresKey, false);
+  const dark = resolveBasemap("dark");
+  assert.equal(dark.url, PRESETS.osm.url, "dark is the keyless inverted-OSM recipe");
+  assert.equal(dark.filter, DARK_FILTER);
+  assert.equal(dark.requiresKey, false);
+  const voyager = resolveBasemap("voyager");
+  assert.equal(voyager.url, PRESETS["carto-voyager"].url);
+  assert.equal(voyager.requiresKey, true, "voyager keeps the CARTO key warning");
+});
+
+test("an unknown preset is rejected instead of silently falling back to osm", () => {
+  assert.throws(() => resolveBasemap("banana"), /unknown basemap preset/);
+  assert.throws(() => resolveBasemap({ preset: "lightt" }), /unknown basemap preset/);
+});
+
+test("filter and opacity are validated before they reach the SVG", () => {
+  for (const bad of [
+    'brightness(0.5)" onload="alert(1)',
+    "url(https://evil.example/x.svg)",
+    "drop-shadow(2px 2px 4px #000)",
+    "brightness(0.5); color: red",
+    42,
+  ]) {
+    assert.throws(() => resolveBasemap({ preset: "osm", filter: bad }), /basemap\.filter/, JSON.stringify(bad));
+  }
+  for (const good of [DARK_FILTER, "saturate(0.6) brightness(0.72)", "grayscale(50%)", "blur(1.5px)"]) {
+    assert.equal(resolveBasemap({ preset: "osm", filter: good }).filter, good);
+  }
+  for (const bad of [-0.1, 1.5, "0.5", NaN, Infinity]) {
+    assert.throws(() => resolveBasemap({ preset: "osm", opacity: bad }), /basemap\.opacity/, String(bad));
+  }
+  assert.equal(resolveBasemap({ preset: "osm", opacity: 0.5 }).opacity, 0.5);
+});
+
+test("zoom and tile budgets are bounded integers", () => {
+  for (const bad of [1.5, -1, 26, "14"]) assert.throws(() => resolveBasemap({ preset: "osm", zoom: bad }), /basemap\.zoom/, String(bad));
+  for (const bad of [0, -5, 1.5, 4097, "400"]) assert.throws(() => resolveBasemap({ preset: "osm", maxTiles: bad }), /basemap\.maxTiles/, String(bad));
+  for (const bad of [-1, 26, 1.5]) assert.throws(() => resolveBasemap({ preset: "osm", maxZoom: bad }), /basemap\.maxZoom/, String(bad));
+  assert.equal(resolveBasemap({ preset: "osm", zoom: 25, maxZoom: 25 }).zoom, 25);
+});
+
+test("an explicit zoom above the preset's maxZoom is clamped with a warning", () => {
+  const cfg = resolveBasemap({ preset: "osm", zoom: 22 });
+  assert.equal(cfg.zoom, 19);
+  assert.ok(cfg.warnings.some((w) => /clamped/.test(w)));
+});
+
+test("a custom url without attribution earns a warning", () => {
+  const cfg = resolveBasemap({ url: "https://example.test/{z}/{x}/{y}.png" });
+  assert.ok(cfg.warnings.some((w) => /attribution/.test(w)));
+});
+
+test("a hostile filter never reaches the SVG: render rejects the spec", async () => {
+  const spec = {
+    kind: "bubbles",
+    title: "Injection",
+    region: [12.45, 55.61, 12.66, 55.75],
+    size: "landscape",
+    data: [
+      { place: "Copenhagen", country: "DNK", runs: 427 },
+      { place: "Aarhus", country: "DNK", runs: 26 },
+    ],
+    value: "runs",
+    labelTop: 3,
+    basemap: { preset: "osm", filter: 'brightness(0.5)" onload="alert(1)' },
+  };
+  await assert.rejects(render(spec, { ...opts, fetchTile: stubFetch }), /basemap\.filter/);
+});
+
+test("the dark alias renders inverted OSM tiles", async () => {
+  const spec = {
+    kind: "bubbles",
+    title: "Dark",
+    region: [12.45, 55.61, 12.66, 55.75],
+    size: "landscape",
+    data: [
+      { place: "Copenhagen", country: "DNK", runs: 427 },
+      { place: "Aarhus", country: "DNK", runs: 26 },
+    ],
+    value: "runs",
+    labelTop: 3,
+    basemap: "dark",
+  };
+  const r = await render(spec, { ...opts, fetchTile: stubFetch });
+  assert.ok(r.svg.includes("invert(1) hue-rotate(180deg)"), "dark alias must apply the dark filter");
+  assert.match(r.svg, /OpenStreetMap/, "dark tiles are still OSM tiles and keep the credit");
+});
+
+test("maxTiles is enforced even with an explicit zoom", async () => {
+  const spec = {
+    kind: "bubbles",
+    title: "Budget",
+    region: [12.45, 55.61, 12.66, 55.75],
+    size: "landscape",
+    data: [
+      { place: "Copenhagen", country: "DNK", runs: 427 },
+      { place: "Aarhus", country: "DNK", runs: 26 },
+    ],
+    value: "runs",
+    labelTop: 3,
+    basemap: { preset: "osm", zoom: 14, maxTiles: 8 },
+  };
+  const r = await render(spec, { ...opts, fetchTile: stubFetch });
+  assert.ok(
+    r.report.warnings.some((w) => /over the maxTiles budget/.test(w)),
+    "an explicit zoom that blows the budget must be reported"
+  );
+  const tiles = (r.svg.match(/<image /g) ?? []).length;
+  assert.ok(tiles > 0 && tiles <= 8, `expected at most 8 tiles, got ${tiles}`);
+});
+
+test("an explicit zoom inside the budget is honored", async () => {
+  const spec = {
+    kind: "bubbles",
+    title: "Explicit zoom",
+    region: [12.45, 55.61, 12.66, 55.75],
+    size: "landscape",
+    data: [
+      { place: "Copenhagen", country: "DNK", runs: 427 },
+      { place: "Aarhus", country: "DNK", runs: 26 },
+    ],
+    value: "runs",
+    labelTop: 3,
+    basemap: { preset: "osm", zoom: 10, maxTiles: 400 },
+  };
+  const r = await render(spec, { ...opts, fetchTile: stubFetch });
+  assert.ok(r.report.notes.some((nt) => /at zoom 10\b/.test(nt)), "the explicit zoom must be used");
+  assert.ok(!r.report.warnings.some((w) => /maxTiles budget/.test(w)));
+});
+
+test("fetch bounds: oversized and unresponsive tiles are rejected", async (t) => {
+  const pixel = Buffer.from(PIXEL, "base64");
+  const big = Buffer.alloc(64 * 1024, 1);
+  const server = http.createServer((req, res) => {
+    res.on("error", () => {}); // the timeout test aborts mid-response
+    if (req.url === "/pixel.png") {
+      res.writeHead(200, { "content-type": "image/png", "content-length": pixel.length });
+      res.end(pixel);
+    } else if (req.url === "/big.png") {
+      res.writeHead(200, { "content-type": "image/png", "content-length": big.length });
+      res.end(big);
+    } else if (req.url === "/big-chunked.png") {
+      res.writeHead(200, { "content-type": "image/png" }); // no content-length: chunked
+      res.end(big);
+    } else if (req.url === "/slow.png") {
+      setTimeout(() => {
+        res.writeHead(200, { "content-type": "image/png" });
+        res.end(pixel);
+      }, 400);
+    } else {
+      res.writeHead(404);
+      res.end();
+    }
+  });
+  t.after(() => new Promise((r) => server.close(r)));
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  const ok = await defaultFetchTile(`${base}/pixel.png`, { cache: false });
+  assert.equal(ok.data, PIXEL, "a normal tile round-trips");
+
+  const declared = await defaultFetchTile(`${base}/big.png`, { cache: false, maxBytes: 1024 });
+  assert.ok(declared.error && /cap/.test(declared.error), `declared oversize must fail: ${JSON.stringify(declared)}`);
+
+  const chunked = await defaultFetchTile(`${base}/big-chunked.png`, { cache: false, maxBytes: 1024 });
+  assert.ok(chunked.error && /cap/.test(chunked.error), `streamed oversize must fail: ${JSON.stringify(chunked)}`);
+
+  const slow = await defaultFetchTile(`${base}/slow.png`, { cache: false, timeoutMs: 60 });
+  assert.ok(slow.error && /timeout/i.test(slow.error), `a stalled tile must time out: ${JSON.stringify(slow)}`);
 });

@@ -66,7 +66,9 @@ export async function render(spec, { base = process.cwd(), embedFonts = true, ch
   const raster = rasterCfg
     ? await rasterBasemap({ spec, projection: framed.projection, rect, ...(fetchTile ? { fetchTile } : {}) })
     : null;
-  if (raster?.warning) report.warnings.push(`basemap: ${raster.warning}`);
+  if (raster?.warnings?.length) {
+    for (const w of raster.warnings) report.warnings.push(`basemap: ${w}`);
+  }
   if (raster?.failures?.length) {
     report.warnings.push(
       `basemap: ${raster.failures.length}/${raster.requested} tile(s) failed (${raster.failures[0]}) — gaps are visible`

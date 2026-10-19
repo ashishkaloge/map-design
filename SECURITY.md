@@ -15,7 +15,8 @@ Useful reports include:
   paths it was given;
 - text from a spec or data file that escapes into the SVG or HTML as markup or
   script;
-- the CLI contacting any host other than the configured Overpass endpoint.
+- the CLI contacting any host other than the configured Overpass endpoint or a basemap
+  tile host named by the spec (a preset's host, or the `basemap.url` host).
 
 ## What the tool does
 
@@ -23,6 +24,11 @@ Useful reports include:
 - Writes `<name>.html`, `<name>.svg` and `<name>.png` where you point it.
 - For posters only, sends one query to the public Overpass API (or the endpoint
   you set) and caches the response under `~/.cache/map-design`.
+- For maps whose spec asks for a `basemap`, downloads raster tiles from the
+  preset's tile host (OpenStreetMap or CARTO) or the http(s) URL the spec names,
+  and caches them under `~/.cache/map-design/tiles`. Fetching is bounded: the
+  `maxTiles` budget caps the count (even with an explicit `zoom`), and each tile
+  fetch is capped in time (10 s) and size (2 MB).
 - For PNG export, starts your locally installed Chrome, Edge, Brave or
   Chromium in headless mode with a temporary profile.
 - The generated HTML makes no network requests.
