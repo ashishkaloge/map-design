@@ -4,7 +4,7 @@ Requires Node.js 20 or newer. The skill itself has no dependencies; the build
 tools use a few dev dependencies.
 
 ```bash
-git clone https://github.com/incline-ltd/map-design.git
+git clone https://github.com/ashishkaloge/map-design.git
 cd map-design
 npm install      # only needed for the build tools
 npm test

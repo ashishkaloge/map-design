@@ -9,7 +9,7 @@ Real borders, coastlines and coordinates. No API keys. No runtime dependencies.
 </p>
 
 <p align="center">
-  <a href="https://github.com/incline-ltd/map-design/actions/workflows/ci.yml"><img src="https://github.com/incline-ltd/map-design/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/ashishkaloge/map-design/actions/workflows/ci.yml"><img src="https://github.com/ashishkaloge/map-design/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/Node.js-20%2B-339933" alt="Node.js 20+">
   <img src="https://img.shields.io/badge/dependencies-0-1b1b19" alt="No runtime dependencies">
@@ -22,7 +22,7 @@ Real borders, coastlines and coordinates. No API keys. No runtime dependencies.
 
 <p align="center"><sub>Street poster data: <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a> (ODbL).</sub></p>
 
-<p align="center"><code>npx skills add incline-ltd/map-design</code></p>
+<p align="center"><code>npx skills add ashishkaloge/map-design</code></p>
 
 <p align="center">
   <a href="#ask-for-a-map">Ask for a map</a> ·
@@ -148,13 +148,13 @@ Works with any agent that reads [Agent Skills](https://agentskills.io): Claude
 Code, Codex, Cursor, Gemini CLI, GitHub Copilot, OpenCode and others.
 
 ```bash
-npx skills add incline-ltd/map-design
+npx skills add ashishkaloge/map-design
 ```
 
 In Claude Code you can also install it as a plugin:
 
 ```text
-/plugin marketplace add incline-ltd/map-design
+/plugin marketplace add ashishkaloge/map-design
 /plugin install map-design@map-design
 ```
 
@@ -169,7 +169,7 @@ OpenStreetMap data.
 ### Use it without an agent
 
 The CLI is the same one the agent runs. Run these from the repository folder
-(after `git clone https://github.com/incline-ltd/map-design.git && cd map-design`),
+(after `git clone https://github.com/ashishkaloge/map-design.git && cd map-design`),
 or use the full path to `map.mjs` from anywhere. `render` writes its files next
 to the spec; `poster` writes them to the folder you run it in.
 

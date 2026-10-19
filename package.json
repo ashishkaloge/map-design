@@ -17,7 +17,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/incline-ltd/map-design.git"
+    "url": "git+https://github.com/ashishkaloge/map-design.git"
   },
   "devDependencies": {
     "@fontsource/eb-garamond": "5.2.7",
