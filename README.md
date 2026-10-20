@@ -52,7 +52,7 @@ could not match is listed, so nothing is silently guessed.
 ## Why a skill
 
 A language model knows Lisbon sits on the Tagus. It does not know the shape of
-the river, or where 11,237 streets run. Ask an agent for a map without help and
+the river, or where thousands of streets run. Ask an agent for a map without help and
 you get hand-drawn blobs, invented coordinates, or Leaflet boilerplate that
 needs a tile server and an API key.
 
@@ -61,8 +61,8 @@ renderer supplies real geography and cartography.
 
 | Map | The agent writes | The renderer draws |
 | --- | --- | --- |
-| [Lisbon poster](examples/lisbon/spec.json) | a 93-byte spec | 1.6 MB of paths: 11,237 streets, the Tagus, 3,313 parks and green areas |
-| [Tokyo poster](examples/tokyo/spec.json) | 89 bytes | 2.0 MB: 15,133 streets around the Imperial Palace |
+| [Lisbon poster](examples/lisbon/spec.json) | a 93-byte spec | 1 MB of paths: every street in an 8 km frame, the Tagus and its parks, with 2,990 named streets, parks and waterways on hover |
+| [Tokyo poster](examples/tokyo/spec.json) | 89 bytes | 1.2 MB: every street around the Imperial Palace, 1,433 of them named on hover |
 | [US population change](examples/us-population-change/spec.json) | 661 bytes and a Census CSV | 50 states and DC, classed, labeled, with legend and source |
 | [Voyage of HMS Beagle](examples/beagle-voyage/spec.json) | 22 stops | great-circle legs on an equal-area projection, numbered and dated |
 
