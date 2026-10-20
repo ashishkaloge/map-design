@@ -1,11 +1,21 @@
-// Wraps a rendered SVG in a self-contained HTML page with hover tooltips,
-// zoom and pan, and SVG/PNG downloads. No external requests.
+// Wraps a rendered SVG in a self-contained HTML page with hover details and
+// highlights, zoom and pan, and SVG/PNG downloads. No external requests.
+//
+// Hover works two ways. Data-map elements carry data-name/data-value. Posters
+// pass `features`: named streets, waterways, parks and buildings with their
+// screen geometry (see hover.mjs), found under the cursor with a grid index so
+// even hairline streets can be picked. Either way the feature under the cursor
+// is outlined in the theme's accent colour on an overlay that never reaches the
+// downloaded SVG or PNG.
 import { esc } from "./svg.mjs";
 
-export function toHtml({ svg, width, height, title, dark = false, bg, fileBase = "map" }) {
+export function toHtml({ svg, width, height, title, dark = false, bg, fileBase = "map", features = [], accent = "#E8590C" }) {
   fileBase = String(fileBase).replace(/[^\w.-]+/g, "-") || "map";
   const page = dark ? "#0B0C0E" : "#ECEAE5";
   const ink = dark ? "#E9E6E0" : "#2A2723";
+  const hl = /^#[0-9a-f]{3,8}$/i.test(accent) ? accent : "#E8590C";
+  // JSON inside <script> must not contain "</".
+  const index = JSON.stringify(features).replace(/</g, "\\u003c");
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -25,7 +35,9 @@ export function toHtml({ svg, width, height, title, dark = false, bg, fileBase =
   .frame svg { display: block; width: 100%; height: auto; transform-origin: 0 0; }
   .tip { position: fixed; pointer-events: none; padding: 6px 10px; border-radius: 6px; background: rgba(20,20,22,.92); color: #fff; font-size: 13px; opacity: 0; transition: opacity .08s; max-width: 280px; z-index: 2; }
   .tip b { font-weight: 600; }
+  .tip span { opacity: .8; }
   [data-name]:hover { filter: brightness(1.08) saturate(1.1); cursor: default; }
+  .hl * { pointer-events: none; }
   @media (prefers-reduced-motion: no-preference) { .route { stroke-dashoffset: 0; } }
 </style>
 </head>
@@ -35,26 +47,160 @@ export function toHtml({ svg, width, height, title, dark = false, bg, fileBase =
   <div class="frame">${svg}</div>
 </main>
 <div class="tip" role="status"></div>
+<script type="application/json" id="map-features">${index}</script>
 <script>
 (() => {
   const frame = document.querySelector(".frame");
   const svg = frame.querySelector("svg");
   const tip = document.querySelector(".tip");
+  let drag = null;
   const source = svg.outerHTML;
-  // Tooltips: use data-name/data-value; drop native <title> popups on those elements.
+  // Hover: data-name elements first, then the feature index (posters).
   for (const el of svg.querySelectorAll("[data-name]")) el.querySelector(":scope > title")?.remove();
-  svg.addEventListener("pointermove", (e) => {
-    const el = e.target.closest("[data-name]");
-    if (!el || !el.dataset.name) { tip.style.opacity = 0; return; }
-    tip.innerHTML = "<b></b>" + (el.dataset.value ? "<br><span></span>" : "");
-    tip.querySelector("b").textContent = el.dataset.name;
-    if (el.dataset.value) tip.querySelector("span").textContent = el.dataset.value;
+  const NS = "http://www.w3.org/2000/svg";
+  const HL = ${JSON.stringify(hl)};
+  const VB = svg.viewBox.baseVal;
+  const layer = document.createElementNS(NS, "g");
+  layer.setAttribute("class", "hl");
+  const items = JSON.parse(document.getElementById("map-features").textContent);
+  // Decode [x0, y0, dx, dy, …] in tenths of a unit into flat coordinate arrays.
+  for (const it of items) {
+    it.g = it.g.map((enc) => {
+      const pts = new Float32Array(enc.length);
+      let x = 0, y = 0;
+      for (let i = 0; i < enc.length; i += 2) { x += enc[i]; y += enc[i + 1]; pts[i] = x / 10; pts[i + 1] = y / 10; }
+      return pts;
+    });
+    if (it.k === "a") {
+      it.area = 0;
+      for (const r of it.g) { let a = 0; for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) a += (r[j] + r[i]) * (r[j + 1] - r[i + 1]); it.area += Math.abs(a / 2); }
+    }
+  }
+  // Grid index over segment and ring bounding boxes.
+  const CELL = 24, cols = Math.ceil(VB.width / CELL) + 1;
+  const grid = new Map();
+  const put = (i, x0, y0, x1, y1) => {
+    const c0 = Math.max(0, Math.floor(x0 / CELL)), c1 = Math.floor(x1 / CELL);
+    const r0 = Math.max(0, Math.floor(y0 / CELL)), r1 = Math.floor(y1 / CELL);
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      const k = r * cols + c, list = grid.get(k);
+      if (!list) grid.set(k, [i]); else if (list[list.length - 1] !== i) list.push(i);
+    }
+  };
+  items.forEach((it, i) => {
+    for (const p of it.g) {
+      if (it.k === "l") {
+        for (let j = 2; j < p.length; j += 2) put(i, Math.min(p[j - 2], p[j]), Math.min(p[j - 1], p[j + 1]), Math.max(p[j - 2], p[j]), Math.max(p[j - 1], p[j + 1]));
+      } else {
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (let j = 0; j < p.length; j += 2) { x0 = Math.min(x0, p[j]); x1 = Math.max(x1, p[j]); y0 = Math.min(y0, p[j + 1]); y1 = Math.max(y1, p[j + 1]); }
+        put(i, x0, y0, x1, y1);
+      }
+    }
+  });
+  const segDist = (px, py, ax, ay, bx, by) => {
+    const dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy;
+    const t = l ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l)) : 0;
+    return Math.hypot(px - ax - t * dx, py - ay - t * dy);
+  };
+  const inside = (it, x, y) => {
+    let n = false;
+    for (const r of it.g) for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) {
+      if ((r[i + 1] > y) !== (r[j + 1] > y) && x < ((r[j] - r[i]) * (y - r[i + 1])) / (r[j + 1] - r[i + 1]) + r[i]) n = !n;
+    }
+    return n;
+  };
+  // A line within half the reach wins over the area the cursor is in; past that
+  // the area wins. Among areas the smallest one containing the point wins, so a
+  // building inside a park is found before the park.
+  function pick(x, y, tol) {
+    const seen = new Set();
+    let best = null, score = Infinity;
+    const c0 = Math.floor((x - tol) / CELL), c1 = Math.floor((x + tol) / CELL);
+    const r0 = Math.floor((y - tol) / CELL), r1 = Math.floor((y + tol) / CELL);
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      for (const i of grid.get(r * cols + c) ?? []) {
+        if (seen.has(i)) continue;
+        seen.add(i);
+        const it = items[i];
+        let s = Infinity;
+        if (it.k === "l") {
+          for (const p of it.g) for (let j = 2; j < p.length; j += 2) s = Math.min(s, segDist(x, y, p[j - 2], p[j - 1], p[j], p[j + 1]));
+          if (s > tol) s = Infinity;
+        } else if (inside(it, x, y)) s = tol / 2 + it.area / 1e12;
+        if (s < score) { score = s; best = it; }
+      }
+    }
+    return best;
+  }
+  const shapeOf = (it) => {
+    let d = "";
+    for (const p of it.g) {
+      d += "M" + p[0] + "," + p[1];
+      for (let j = 2; j < p.length; j += 2) d += "L" + p[j] + "," + p[j + 1];
+      if (it.k === "a") d += "Z";
+    }
+    const path = (stroke, w, fill, op) => {
+      const e = document.createElementNS(NS, "path");
+      e.setAttribute("d", d);
+      e.setAttribute("fill", fill);
+      if (op) e.setAttribute("fill-opacity", op);
+      e.setAttribute("stroke", stroke);
+      e.setAttribute("stroke-width", w);
+      e.setAttribute("stroke-linecap", "round");
+      e.setAttribute("stroke-linejoin", "round");
+      e.setAttribute("vector-effect", "non-scaling-stroke");
+      return e;
+    };
+    return it.k === "l"
+      ? [path("rgba(0,0,0,.45)", 7, "none"), path(HL, 4, "none")]
+      : [path(HL, 2.5, HL, 0.32)];
+  };
+  // Outline a data-name element with a copy drawn on top of it.
+  const cloneOf = (el) => {
+    if (!/^(path|circle|rect|polygon|polyline|ellipse|line)$/.test(el.tagName)) return [];
+    const c = el.cloneNode(false);
+    c.removeAttribute("data-name");
+    c.removeAttribute("class");
+    c.setAttribute("stroke", HL);
+    c.setAttribute("stroke-width", 2.5);
+    c.setAttribute("stroke-opacity", 1);
+    c.setAttribute("vector-effect", "non-scaling-stroke");
+    if (el.getAttribute("fill") && el.getAttribute("fill") !== "none") c.setAttribute("fill-opacity", 0);
+    return [c];
+  };
+  let current = null;
+  function show(target, e, name, info) {
+    if (target !== current) {
+      current = target;
+      layer.replaceChildren();
+      if (target) {
+        const shapes = target.g ? shapeOf(target) : cloneOf(target);
+        if (target.g) { layer.append(...shapes); svg.append(layer); }
+        else if (shapes.length) { layer.append(...shapes); target.after(layer); }
+      }
+    }
+    if (!target) { tip.style.opacity = 0; return; }
+    tip.innerHTML = "<b></b>" + (info ? "<br><span></span>" : "");
+    tip.querySelector("b").textContent = name;
+    if (info) tip.querySelector("span").textContent = info;
     const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8);
     tip.style.left = x + "px"; tip.style.top = (e.clientY + 14) + "px"; tip.style.opacity = 1;
+  }
+  svg.addEventListener("pointermove", (e) => {
+    if (drag) return;
+    const el = e.target.closest("[data-name]");
+    if (el && el.dataset.name) return show(el, e, el.dataset.name, el.dataset.value);
+    if (!items.length) return show(null, e);
+    const r = svg.getBoundingClientRect();
+    const k = VB.width / r.width;
+    const x = VB.x + (e.clientX - r.left) * k, y = VB.y + (e.clientY - r.top) * k;
+    const it = pick(x, y, 6 * k);
+    show(it, e, it?.n, it?.i);
   });
-  svg.addEventListener("pointerleave", () => (tip.style.opacity = 0));
+  svg.addEventListener("pointerleave", (e) => show(null, e));
   // Zoom and pan with CSS transforms.
-  let k = 1, tx = 0, ty = 0, drag = null;
+  let k = 1, tx = 0, ty = 0;
   const apply = () => (svg.style.transform = "translate(" + tx + "px," + ty + "px) scale(" + k + ")");
   frame.addEventListener("wheel", (e) => {
     if (!(e.ctrlKey || e.metaKey)) return;

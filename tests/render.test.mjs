@@ -225,8 +225,9 @@ test("poster check rejects invalid coordinates and offsets before downloading", 
 test("posters take labeled pins, at the center or at a location", async () => {
   const base = { kind: "poster", center: [10, 50], radiusKm: 1, osm: "fixtures/mini-osm.json", title: "Testburg" };
   const r = await render({ ...base, markers: [{ label: "Home" }, { lon: 10.005, lat: 50.004, label: "Lake", color: "#00AA88" }] }, opts);
-  assert.equal((r.svg.match(/<g class="pin">/g) ?? []).length, 2);
+  assert.equal((r.svg.match(/<g class="pin"/g) ?? []).length, 2);
   assert.match(r.svg, />Home</);
+  assert.match(r.svg, /<g class="pin" data-name="Lake" data-value="50\.0040° N/, "pins carry hover details");
   assert.match(r.svg, /#00AA88/);
   const far = await render({ ...base, markers: [{ lon: 11, lat: 51, label: "Far" }] }, opts);
   assert.doesNotMatch(far.svg, /class="pin"/);

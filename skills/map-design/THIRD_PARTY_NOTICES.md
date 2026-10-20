@@ -42,10 +42,14 @@ license text is in [polylabel-LICENSE](scripts/vendor/licenses/polylabel-LICENSE
   Census Bureau cartographic boundary files: public domain. The upstream
   license text is in [us-atlas-LICENSE](scripts/vendor/licenses/us-atlas-LICENSE).
 - [OurAirports](https://ourairports.com/data/) airport data: public domain.
-- City posters download data from [OpenStreetMap](https://www.openstreetmap.org/copyright)
-  at render time. OpenStreetMap data is © OpenStreetMap contributors and
-  available under the Open Database License 1.0. Posters print the credit and
-  copyright URL. OpenStreetMap downloads are not bundled in this skill.
+- City posters and the `streets` basemap download data from
+  [OpenStreetMap](https://www.openstreetmap.org/copyright) at render time, as
+  vector tiles in the [OpenMapTiles](https://openmaptiles.org/) schema served by
+  [OpenFreeMap](https://openfreemap.org/), or from the Overpass API as a fallback.
+  OpenStreetMap data is © OpenStreetMap contributors and available under the Open
+  Database License 1.0; the OpenMapTiles schema is credited as © OpenMapTiles.
+  Maps print both credits and the copyright URL. Downloads are not bundled in
+  this skill.
 - Repository examples: `examples/us-population-change/states.csv` is derived
   from the US Census Bureau Vintage 2024 population estimates (public domain).
   Other examples use the bundled Natural Earth and OurAirports data, or cite

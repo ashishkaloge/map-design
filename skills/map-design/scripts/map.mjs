@@ -72,7 +72,7 @@ async function doRender(spec, base, outBase, args) {
   if (args.html !== false) {
     const htmlFile = `${outBase}.html`;
     const bg = result.theme?.bg;
-    writeFileSync(htmlFile, toHtml({ svg: result.svg, width: result.width, height: result.height, title: spec.title ?? spec.kind, dark: result.theme?.dark ?? isDark(bg), bg, fileBase: basename(outBase) }));
+    writeFileSync(htmlFile, toHtml({ svg: result.svg, width: result.width, height: result.height, title: spec.title ?? spec.kind, dark: result.theme?.dark ?? isDark(bg), bg, fileBase: basename(outBase), features: result.interactive?.items, accent: result.interactive?.accent ?? result.theme?.accent }));
     files.html = htmlFile;
   }
   let png = null;

@@ -12,7 +12,7 @@ export function pathFor(projection) {
  * Draw the base map. Returns { under, over, countries, path } where `under`
  * goes below thematic layers and `over` (borders, sphere outline) above them.
  */
-export function basemap({ framed, theme, rect, spec, focus = [], thematic = false, admin1Of, raster = "" }) {
+export function basemap({ framed, theme, rect, spec, focus = [], thematic = false, admin1Of, raster = "", coast = true }) {
   const { projection, isWorld, usa, globe, cropped } = framed;
   const path = pathFor(projection);
   const [[x0, y0], [x1, y1]] = rect;
@@ -72,7 +72,8 @@ export function basemap({ framed, theme, rect, spec, focus = [], thematic = fals
   }
   const borders = meshOf(land, "countries", (a, b) => a !== b);
   over.push(`<path d="${path(borders)}" fill="none" stroke="${theme.border}" stroke-width="${n(Math.max(0.6, (thematic ? 0.8 : 0.9) * unit), 2)}" stroke-linejoin="round"/>`);
-  over.push(`<path d="${landPath}" fill="none" stroke="${theme.coast}" stroke-width="${n(Math.max(0.4, 0.6 * unit), 2)}" stroke-linejoin="round"/>`);
+  // A street basemap draws its own detailed shoreline; the 1:50m one would not match it.
+  if (coast) over.push(`<path d="${landPath}" fill="none" stroke="${theme.coast}" stroke-width="${n(Math.max(0.4, 0.6 * unit), 2)}" stroke-linejoin="round"/>`);
   if (isWorld && !cropped) over.push(`<path d="${path({ type: "Sphere" })}" fill="none" stroke="${theme.sphere}" stroke-width="${n(Math.max(0.8, 1.1 * unit), 2)}"/>`);
 
   // A raster basemap replaces the whole vector under-layer (water, graticule,

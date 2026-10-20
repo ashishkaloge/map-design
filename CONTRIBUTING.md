@@ -21,9 +21,10 @@ Good contributions:
 
 Keep pull requests focused and add a test for behavior changes. The skill must
 stay runnable with plain `node`: no runtime dependencies. Network access is limited
-to the documented Overpass download for posters and explicitly requested raster
-basemap tiles. Spec checks stay offline and write nothing. Test tiles with injected
-responses or a local HTTP server; do not call public tile services in tests.
+to the documented vector tile and Overpass downloads for posters and the `streets`
+basemap, and explicitly requested raster basemap tiles. Spec checks stay offline
+and write nothing. Test tiles with injected responses or a local HTTP server; do not
+call public tile services in tests (`tests/vtiles.test.mjs` encodes synthetic tiles).
 
 Rebuilding bundled data needs the raw downloads listed in
 [docs/data-sources.md](docs/data-sources.md).

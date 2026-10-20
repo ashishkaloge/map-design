@@ -163,9 +163,10 @@ Or copy `skills/map-design/` into your agent's skills folder, for example
 
 Requirements: Node.js 20 or newer. PNG export uses a Chrome, Edge, Brave or
 Chromium you already have; without one you still get HTML and SVG, and the
-HTML page has a PNG button. City posters need an internet connection to fetch
-OpenStreetMap data. Optional raster basemaps also download tiles; provider terms
-and caching differ. See [basemaps](skills/map-design/references/basemaps.md).
+HTML page has a PNG button. City posters and the `streets` basemap need an
+internet connection to fetch OpenStreetMap data as vector tiles. Optional raster
+basemaps also download tiles; provider terms and caching differ. See
+[basemaps](skills/map-design/references/basemaps.md).
 
 ### Use it without an agent
 
@@ -199,8 +200,10 @@ node skills/map-design/scripts/map.mjs themes
 **Themes for posters:** `noir`, `paper`, `mono`, `blueprint`, `sumi`, `terracotta`, `azulejo`, `neon`, `forest`.
 
 Every map is one SVG with its fonts embedded, so it looks the same in a
-browser, a slide or a print shop. The HTML adds hover tooltips, zoom and pan,
-and SVG and PNG download buttons. It makes no network requests.
+browser, a slide or a print shop. The HTML adds hover details that outline the
+feature under the cursor (a country and its value, or on posters and street
+basemaps a street's name, class and length, a park's area, a landmark's height),
+zoom and pan, and SVG and PNG download buttons. It makes no network requests.
 
 A spec is short:
 
@@ -238,13 +241,17 @@ Design guidance the agent follows: [cartography.md](skills/map-design/references
 5. **Export.** HTML, SVG and PNG (2×, or 3× for posters: 3600×4800 px, 12×16 in
    at 300 dpi).
 
-Posters fetch streets, water, parks, rail and coastline from the public
-Overpass API in one query, cache them, and rebuild the sea from OpenStreetMap
-coastlines. Car-free centers such as Venice automatically get footpaths.
+Posters read streets, buildings, water, parks and rail from OpenStreetMap vector
+tiles (the OpenMapTiles schema, served free by [OpenFreeMap](https://openfreemap.org))
+and cache them, so a re-render with another theme is offline. Roads fade by class,
+blocks fill with building footprints in frames up to about 6 km across, and
+whole-city frames up to 60 km wide keep every street. If the tile service is
+unreachable, posters fall back to one query to the public Overpass API. Car-free
+centers such as Venice automatically get footpaths.
 
 The skill is about 9 MB: 8 MB of simplified open data, 0.8 MB of fonts and the
 renderer. Bundled vector maps and spec checks work offline. Poster downloads and
-requested raster basemap tiles require network access; generated files are self-contained.
+requested basemap tiles require network access; generated files are self-contained.
 
 ## Limits
 
@@ -252,13 +259,16 @@ requested raster basemap tiles require network access; generated files are self-
   way Natural Earth draws them, which does not match every government's official
   position. See [cartography.md](skills/map-design/references/cartography.md#borders-and-names).
 - **Small places** outside the gazetteer need `lon`/`lat`.
-- **Posters** depend on the public Overpass API, which is sometimes at capacity.
-  The CLI backs off and retries, and caches every download.
+- **Posters** depend on OpenFreeMap's free tile service, which has no uptime
+  guarantee, with the public Overpass API as the fallback. Every download is
+  cached. Building footprints come from the tiles, and some sources merge
+  neighbouring buildings.
 - **Labels** are placed greedily. On dense maps some are left out; the report
   lists them.
-- **Raster basemaps** are optional static tiles under the data, with Mercator
-  projection and a bounded tile budget. Provider access, attribution and export
-  requirements apply. No road routing, terrain shading or your own boundary files yet.
+- **Basemaps** are optional: `streets` draws vector streets in any projection,
+  and raster presets embed static Mercator tiles. Provider access, attribution and
+  export requirements apply. No road routing, terrain shading or your own boundary
+  files yet.
 - **Statistics in `builtin:countries`** are Natural Earth's 2019 estimates. For
   current figures, give the agent a source to fetch.
 

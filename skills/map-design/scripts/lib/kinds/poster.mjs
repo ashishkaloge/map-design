@@ -5,14 +5,19 @@ import { resolve as resolvePath } from "node:path";
 import { posterTheme } from "../themes.mjs";
 import { resolveSize } from "../layout.mjs";
 import { fetchOsm, classify, coastToLand, clipPolyline } from "../osm.mjs";
+import { chooseVectorZoom, fetchVectorTiles, decodeTiles } from "../vtiles.mjs";
 import { resolveLocation, countryAt } from "../locate.mjs";
 import { findCountry } from "../data.mjs";
 import { embedFonts } from "../fonts.mjs";
 import { SpecError } from "../errors.mjs";
 import { esc, n, formatCoords, textWidth } from "../svg.mjs";
+import { buildHover, thin, lineData, ringData } from "../hover.mjs";
 
 const ORDER = ["path", "service", "residential", "tertiary", "secondary", "primary", "trunk", "motorway"];
 const CASED = new Set(["secondary", "primary", "trunk", "motorway"]);
+const BUILDINGS_MAX_BYTES = 8e6;
+const CLASSES_LOW = ["tertiary", "secondary", "primary", "trunk", "motorway"];
+const CLASSES_MEDIUM = ["residential", ...CLASSES_LOW];
 const RAD = Math.PI / 180;
 const mercY = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * RAD) / 2));
 
@@ -68,33 +73,80 @@ export async function renderPoster(spec, { base = process.cwd(), embedFonts: emb
     return { svg: "", report, width: W, height: H, theme, spec };
   }
   // A local Overpass JSON export can stand in for the download.
-  const osm = spec.osm
-    ? JSON.parse(readFileSync(resolvePath(base, spec.osm), "utf8"))
-    : await fetchOsm([south, west, north, east], { detail: spec.detail ?? (radiusKm > 9 ? "low" : "medium"), endpoint: spec.overpass, log });
-  let layers = classify(osm);
-  let roadCount = Object.values(layers.roads).reduce((s, r) => s + r.length, 0);
-  const detail = spec.detail ?? (radiusKm > 9 ? "low" : "medium");
+  const source = spec.osm ? "file" : spec.source ?? "auto";
+  if (!["auto", "vector", "overpass", "file"].includes(source)) throw new SpecError('source must be "auto", "vector" or "overpass".');
+  if (spec.detail != null && !["low", "medium", "high"].includes(spec.detail)) throw new SpecError('detail must be "low", "medium" or "high".');
+  let layers;
   let carFree = false;
-  if (!spec.osm && !spec.detail && detail === "medium" && roadCount < 400) {
-    carFree = true;
-    // Car-free centers (Venice, old towns) are mostly footpaths; fetch those too.
-    report.notes.push("Few streets for cars here; added footpaths and pedestrian streets (detail: high).");
-    layers = classify(await fetchOsm([south, west, north, east], { detail: "high", endpoint: spec.overpass, log }));
-    roadCount = Object.values(layers.roads).reduce((s, r) => s + r.length, 0);
+  let credit = "© OpenStreetMap contributors";
+  let detail = spec.detail ?? "medium";
+  if (source === "auto" || source === "vector") {
+    try {
+      const pick = chooseVectorZoom({ west, south, east, north });
+      const got = await fetchVectorTiles(pick, { log });
+      layers = decodeTiles(got.tiles);
+      credit = got.attribution;
+      report.notes.push(
+        `Map data: ${got.count} vector tiles at zoom ${got.zoom} from OpenFreeMap (OpenMapTiles schema)${got.downloaded ? `, ${got.downloaded} downloaded (${(got.bytes / 1e6).toFixed(1)} MB)` : ", all cached"}.`,
+      );
+      // Zoom 13 and below keep only the largest buildings; specks would read as noise.
+      if (got.zoom < 14) {
+        layers.buildings = [];
+        report.notes.push("Building footprints are drawn for frames up to about 11 km wide; this one is larger.");
+      }
+    } catch (e) {
+      if (e instanceof SpecError || source === "vector") throw e;
+      report.warnings.push(`Vector tiles unavailable (${e.message}); downloading from Overpass instead.`);
+      layers = null;
+    }
   }
+  if (layers) {
+    // Vector tiles carry every class; keep what the detail level asks for.
+    const keep = { low: CLASSES_LOW, medium: CLASSES_MEDIUM, high: ORDER }[detail];
+    const cars = CLASSES_MEDIUM.reduce((s, c) => s + (layers.roads[c]?.length ?? 0), 0);
+    if (!spec.detail && cars < 400 && (layers.roads.path?.length ?? 0) > cars) {
+      carFree = true;
+      detail = "high";
+      report.notes.push("Few streets for cars here; drew footpaths and pedestrian streets as streets (detail: high).");
+    }
+    for (const cls of Object.keys(layers.roads)) if (!(carFree ? ORDER : keep).includes(cls)) delete layers.roads[cls];
+  } else {
+    // Overpass: one query for the frame, cached on disk. Wide frames ask for
+    // major roads only to keep the shared server's load down.
+    detail = spec.detail ?? (radiusKm > 9 ? "low" : "medium");
+    const osm = spec.osm
+      ? JSON.parse(readFileSync(resolvePath(base, spec.osm), "utf8"))
+      : await fetchOsm([south, west, north, east], { detail, endpoint: spec.overpass, log });
+    layers = classify(osm);
+    const count = Object.values(layers.roads).reduce((s, r) => s + r.length, 0);
+    if (!spec.osm && !spec.detail && detail === "medium" && count < 400) {
+      carFree = true;
+      // Car-free centers (Venice, old towns) are mostly footpaths; fetch those too.
+      report.notes.push("Few streets for cars here; added footpaths and pedestrian streets (detail: high).");
+      layers = classify(await fetchOsm([south, west, north, east], { detail: "high", endpoint: spec.overpass, log }));
+    }
+  }
+  const roadCount = Object.values(layers.roads).reduce((s, r) => s + r.length, 0);
   if (!roadCount) report.warnings.push("No streets found here. Check the place or coordinates.");
-  report.notes.push(`OpenStreetMap features: ${roadCount} streets, ${layers.water.length} water areas, ${layers.parks.length} green areas, ${layers.coast.length} coastline ways.`);
+  report.notes.push(`OpenStreetMap features: ${roadCount} streets, ${layers.water.length} water areas, ${layers.parks.length} green areas, ${layers.buildings?.length ?? 0} buildings, ${layers.coast.length} coastline ways.`);
 
   const rect = [0, 0, W, H];
   const toScreen = ([x, y]) => `${n(x)},${n(H - y)}`;
   const ringPath = (ring) => `M${ring.map(toScreen).join("L")}Z`;
-  const polyPath = (rings) => rings.map((r) => ringPath(r.map(project))).join("");
+  // Geometry is thinned to what the exported print can show: points closer than
+  // a third of a pixel (at 1200 px wide) merge, and shapes smaller than a pixel
+  // or outside the frame are dropped. The SVG stays a few MB instead of tens.
+  const tol = 0.3 * (W / 1200);
+  const view = [-20, -20, W + 20, H + 20];
+  const screen = (pts) => pts.map((p) => {
+    const [x, y] = project(p);
+    return [x, H - y];
+  });
+  const polyPath = (rings) => rings.map((r) => ringData(screen(r), tol, view)).join("");
   const linePaths = (lines) => {
     const out = [];
     for (const l of lines) {
-      for (const piece of clipPolyline(l.map(project), [-20, -20, W + 20, H + 20])) {
-        out.push(`M${piece.coords.map(toScreen).join("L")}`);
-      }
+      for (const piece of clipPolyline(l.map(project), view)) out.push(lineData(thin(piece.coords.map(([x, y]) => [x, H - y]), tol)));
     }
     return out.join("");
   };
@@ -111,9 +163,18 @@ export async function renderPoster(spec, { base = process.cwd(), embedFonts: emb
   }
   const showParks = spec.layers?.parks !== false;
   const showWater = spec.layers?.water !== false;
-  if (showParks && layers.parks.length) parts.push(`<path d="${layers.parks.map(polyPath).join("")}" fill="${theme.park}" fill-rule="evenodd"/>`);
-  if (showWater && layers.water.length) parts.push(`<path d="${layers.water.map(polyPath).join("")}" fill="${theme.water}" fill-rule="evenodd"/>`);
+  const fillRule = layers.fillRule ?? "evenodd";
+  if (showParks && layers.parks.length) parts.push(`<path d="${layers.parks.map(polyPath).join("")}" fill="${theme.park}" fill-rule="${fillRule}"/>`);
+  if (showWater && layers.water.length) parts.push(`<path d="${layers.water.map(polyPath).join("")}" fill="${theme.water}" fill-rule="${fillRule}"/>`);
   if (showWater && layers.rivers.length) parts.push(`<path d="${linePaths(layers.rivers.map((r) => r.line))}" fill="none" stroke="${theme.water}" stroke-width="${n(3 * W / 1200, 2)}" stroke-linecap="round" stroke-linejoin="round"/>`);
+  if (spec.layers?.buildings !== false && layers.buildings?.length) {
+    const d = layers.buildings.map((b) => polyPath(b.rings)).join("");
+    // Every footprint is its own ring; a dense city centre wider than about 6 km
+    // has hundreds of thousands. Past 8 MB they are left out unless asked for.
+    if (d.length > BUILDINGS_MAX_BYTES && spec.layers?.buildings !== true) {
+      report.notes.push(`Buildings left out: ${(d.length / 1e6).toFixed(1)} MB of footprints at this size. Set "layers": { "buildings": true } to draw them anyway.`);
+    } else if (d) parts.push(`<path class="buildings" d="${d}" fill="${theme.building}" fill-rule="${fillRule}"/>`);
+  }
   if (spec.layers?.rail !== false && layers.rail.length) {
     parts.push(`<path d="${linePaths(layers.rail)}" fill="none" stroke="${theme.rail}" stroke-width="${n(0.8 * W / 1200, 2)}" stroke-dasharray="${n(5 * W / 1200)} ${n(2.5 * W / 1200)}"/>`);
   }
@@ -131,6 +192,16 @@ export async function renderPoster(spec, { base = process.cwd(), embedFonts: emb
     if (CASED.has(cls)) parts.push(`<path class="casing ${cls}" d="${d}" fill="none" stroke="${theme.casing ?? theme.bg}" stroke-width="${n((style.width + 1.1) * scale, 2)}" stroke-linecap="round" stroke-linejoin="round"/>`);
     parts.push(`<path class="road ${cls}" d="${d}" fill="none" stroke="${style.color}" stroke-width="${n(style.width * scale, 2)}" stroke-linecap="round" stroke-linejoin="round"${faint ? ' stroke-opacity="0.7"' : ""}/>`);
   }
+
+  // Hover targets for the HTML page: named streets, waterways, green areas and
+  // landmark buildings, described with what the map itself measures.
+  const kmPerPx = (2 * radiusKm) / W;
+  const hover = buildHover(layers, {
+    drawn: new Set(Object.keys(layers.roads)), carFree, toScreen: (p) => {
+      const [x, y] = project(p);
+      return [x, H - y];
+    }, view, tol, kmPerPx, showParks, showWater, buildingsDrawn: parts.some((p) => p.startsWith('<path class="buildings"')),
+  });
 
   // Typography.
   const locale = titleLocale(spec.lang, countryCode ?? countryAt(center[0], center[1]));
@@ -157,7 +228,7 @@ export async function renderPoster(spec, { base = process.cwd(), embedFonts: emb
   if (spec.coords !== false) {
     furniture.push(`<text x="${W / 2}" y="${n(baseY + 112 * u)}" text-anchor="middle" font-family="${esc(theme.mono)}" font-size="${n(15 * u)}" font-weight="400" letter-spacing="${n(1.5 * u)}" fill="${theme.muted}">${esc(formatCoords(center[0], center[1]))}</text>`);
   }
-  furniture.push(`<text x="${n(W - 24 * u)}" y="${n(H - 20 * u)}" text-anchor="end" font-family="${esc(theme.mono)}" font-size="${n(10 * u)}" fill="${theme.muted}" fill-opacity="0.8">© OpenStreetMap contributors · https://www.openstreetmap.org/copyright</text>`);
+  furniture.push(`<text x="${n(W - 24 * u)}" y="${n(H - 20 * u)}" text-anchor="end" font-family="${esc(theme.mono)}" font-size="${n(10 * u)}" fill="${theme.muted}" fill-opacity="0.8">${esc(credit)} · https://www.openstreetmap.org/copyright</text>`);
 
   let svg = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`Street map of ${placeName}`)}">`,
@@ -170,7 +241,8 @@ export async function renderPoster(spec, { base = process.cwd(), embedFonts: emb
   ].join("\n");
   if (embed) svg = embedFonts(svg);
   report.notes.push("Map data © OpenStreetMap contributors (ODbL). Keep the credit on the poster.");
-  return { svg, report, width: W, height: H, theme: { ...theme, dark: isDark(theme.bg) }, spec };
+  if (hover.length) report.notes.push(`Hover details in the HTML: ${hover.length} named features.`);
+  return { svg, report, width: W, height: H, theme: { ...theme, dark: isDark(theme.bg) }, spec, interactive: { accent: theme.pin ?? theme.text, items: hover } };
 }
 
 /**
@@ -206,7 +278,7 @@ function drawPins(markers, { project, W, H, u, theme, report, fadeTop, center })
     const Hp = 3.2 * R;
     const cyHead = y - Hp + R;
     const pin = `M${n(x)},${n(y)}C${n(x - R * 0.32)},${n(y - Hp * 0.36)} ${n(x - R)},${n(y - Hp * 0.5)} ${n(x - R)},${n(cyHead)}A${n(R)},${n(R)} 0 1 1 ${n(x + R)},${n(cyHead)}C${n(x + R)},${n(y - Hp * 0.5)} ${n(x + R * 0.32)},${n(y - Hp * 0.36)} ${n(x)},${n(y)}Z`;
-    out.push(`<g class="pin">`);
+    out.push(`<g class="pin" data-name="${esc(m.label ?? loc.label ?? "Pin")}" data-value="${esc(formatCoords(loc.lon, loc.lat))}">`);
     out.push(`<ellipse cx="${n(x)}" cy="${n(y)}" rx="${n(R * 0.75)}" ry="${n(R * 0.24)}" fill="#000000" fill-opacity="0.28"/>`);
     out.push(`<circle cx="${n(x)}" cy="${n(y)}" r="${n(R * 1.5)}" fill="none" stroke="${color}" stroke-opacity="0.55" stroke-width="${n(2 * u, 2)}"/>`);
     out.push(`<path d="${pin}" fill="${color}" stroke="${theme.bg}" stroke-width="${n(2.2 * u, 2)}" stroke-linejoin="round"/>`);

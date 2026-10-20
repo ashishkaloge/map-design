@@ -95,19 +95,20 @@ Everything else, per kind: [references/spec.md](references/spec.md).
 ## Basemaps (street-level detail)
 
 The bundled Natural Earth geography is designed for country-scale maps. For streets
-under the data, add an optional raster basemap:
+under the data, add a basemap. Prefer `"streets"`: vector roads, water, parks and
+buildings coloured by the map's theme, sharp at any size, in any projection, with
+street and park names on hover in the HTML. No key needed.
 
 ```json
-{ "kind": "points", "basemap": "dark", "theme": "ink",
+{ "kind": "points", "basemap": "streets", "theme": "ink",
   "region": { "center": [12.55, 55.68], "radiusKm": 6 } }
 ```
 
-`osm`, `osm-hot`, `light` and `dark` are keyless; `voyager` and the `carto-*` presets
-require a provider key supplied in a custom URL. Tiles use Mercator and are embedded
-in the output. CARTO URLs must include one nonempty `key` parameter before fetching.
-The default budget is 144 distinct tiles; `maxTiles` applies even
-with an explicit `zoom`. `check` validates configuration without fetching tiles or
-writing caches. Keep the generated attribution and copyright links visible.
+Raster presets embed tile images instead: `osm`, `osm-hot`, `light` and `dark` are
+keyless; `voyager` and the `carto-*` presets need a provider key in a custom URL.
+They force Mercator. The default budget is 144 distinct tiles; `maxTiles` applies to
+both kinds. `check` validates configuration without fetching tiles or writing
+caches. Keep the generated attribution and copyright links visible.
 
 Before choosing a provider, read [basemap options and provider terms](references/basemaps.md).
 OSM, OSM France and CARTO have different access, cache and export requirements;
@@ -150,12 +151,13 @@ node <skill-dir>/scripts/map.mjs poster --place "Lisbon" --country PRT --theme a
 ```
 
 Or a spec with `"kind": "poster"`. `radiusKm` is half the poster's width on the
-ground: 1.5–3 for an old town, 4–6 for a city center, 8–15 for a metro area
-(larger areas switch to major roads only). Add `--pin "Label"` (or
+ground: 1.5–3 for an old town (building footprints fill the blocks), 4–6 for a city
+center, 10–30 for a whole metro as fine street lace. Add `--pin "Label"` (or
 `markers` in a spec) to mark a spot. Neighborhoods and landmarks need
-coordinates: ask the user rather than guessing. Posters download OpenStreetMap data
-from the public Overpass API, cache it, and must keep the
-"© OpenStreetMap contributors" credit. Details: [references/posters.md](references/posters.md).
+coordinates: ask the user rather than guessing. Posters download OpenStreetMap
+vector tiles from OpenFreeMap (Overpass as fallback), cache them, and must keep the
+"© OpenMapTiles © OpenStreetMap contributors" credit. The HTML names every street,
+park and landmark on hover. Details: [references/posters.md](references/posters.md).
 
 ## When something goes wrong
 

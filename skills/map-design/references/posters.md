@@ -76,20 +76,45 @@ pin lands there or outside the frame.
 ## How it works
 
 1. The place resolves from the bundled gazetteer (or your coordinates).
-2. Streets, water, parks, rail and coastline inside the frame download from the
-   public Overpass API as one query, and are cached in `~/.cache/map-design/osm`
-   (override with `MAP_DESIGN_CACHE`). Re-rendering with another theme is offline.
-3. The sea is reconstructed from OpenStreetMap coastline ways, which keep land
-   on their left. If the coastline cannot be closed cleanly the sea is left
-   unshaded and the report says so.
-4. Streets are drawn minor to major with widths scaled to the frame.
+2. Streets, buildings, water, parks and rail inside the frame download as
+   OpenStreetMap vector tiles (OpenMapTiles schema) from OpenFreeMap and are cached
+   in `~/.cache/map-design/vector` (override the base with `MAP_DESIGN_CACHE`).
+   Re-rendering with another theme is offline. Frames up to about 11 km wide use
+   zoom 14, which carries building footprints; larger frames use zoom 13 or 12,
+   which still carry every residential street.
+3. If the tile service is unreachable, one query goes to the public Overpass API
+   instead and the sea is rebuilt from OpenStreetMap coastline ways. `"source":
+   "overpass"` always uses Overpass; `"source": "vector"` never falls back.
+4. Streets are drawn minor to major. Each class fades from the theme's road colour
+   toward the background, and arteries get a thin background-coloured casing, so
+   the main roads read first and side streets become texture.
+5. Building footprints fill the blocks when they fit in about 8 MB of SVG, which
+   is roughly a 6 km wide frame in a dense city. The report says when they were
+   left out; `"layers": { "buildings": true }` forces them.
+
+## Hover details
+
+The HTML page names what is under the cursor and outlines it in the theme's
+accent colour: a street's name, class, route number and length in view; a river or
+canal; a park, garden or cemetery and its area; a landmark building (museum,
+monument, place of worship…) and its height. Names come from the tiles, and green
+areas and buildings take the name of the point of interest inside them. Pins show
+their label and coordinates. The index is in the HTML only; the SVG and PNG stay
+clean.
+
+## Capitals
+
+Titles are capitalised in the place's language: Turkish and Azerbaijani keep the
+dotted İ, Greek drops accents. The language comes from the country of `place`, or
+of the country under `center`; `"lang": "tr"` overrides it.
 
 ## Etiquette and limits
 
-- The public Overpass API is shared and free. One poster is one query. Do not
-  loop over many cities without pauses, and use the cache.
-- Big frames in dense cities can take a minute to download and produce SVGs
-  of 5 to 20 MB. Use `detail: "low"` or a smaller radius if that is a problem.
-- Keep "© OpenStreetMap contributors" on the poster. It is required by the
-  Open Database License.
+- OpenFreeMap is free and donation-funded. Its terms allow at most 3,000 tiles or
+  50 MB per download; a dense 10 km frame at zoom 14 is about 80 tiles and 33 MB.
+  The renderer enforces the limits and asks for a smaller radius past them.
+- The public Overpass API, the fallback, is shared and free. One poster is one
+  query. Do not loop over many cities without pauses, and use the cache.
+- Keep "© OpenMapTiles © OpenStreetMap contributors" on the poster. The
+  OpenStreetMap credit is required by the Open Database License.
 - Tunnels and subways are left out so the street pattern stays readable.
