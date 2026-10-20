@@ -88,9 +88,10 @@ pin lands there or outside the frame.
 4. Streets are drawn minor to major. Each class fades from the theme's road colour
    toward the background, and arteries get a thin background-coloured casing, so
    the main roads read first and side streets become texture.
-5. Building footprints fill the blocks when they fit in about 8 MB of SVG, which
-   is roughly a 6 km wide frame in a dense city. The report says when they were
-   left out; `"layers": { "buildings": true }` forces them.
+5. Building footprints fill the blocks up to `radiusKm` 3 (a 6 km wide frame)
+   when they fit in about 8 MB of SVG. Wider, they blur into a haze that dulls the
+   streets. The report says when they were left out; `"layers": { "buildings": true }`
+   forces them.
 
 ## Hover details
 

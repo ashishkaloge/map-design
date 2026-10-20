@@ -189,7 +189,7 @@ export const EDITORIAL = {
 // Roads fade from the road colour toward the background by class, so arteries
 // read first and the residential mesh becomes texture. FADE is how far each
 // class moves toward the background; WIDTH is the stroke at 1200 px wide.
-const FADE = { motorway: 0, trunk: 0.03, primary: 0.08, secondary: 0.18, tertiary: 0.28, residential: 0.4, service: 0.55, path: 0.6 };
+const FADE = { motorway: 0, trunk: 0.02, primary: 0.05, secondary: 0.1, tertiary: 0.16, residential: 0.26, service: 0.4, path: 0.46 };
 const WIDTH = { motorway: 2.6, trunk: 2.3, primary: 1.8, secondary: 1.35, tertiary: 1.05, residential: 0.6, service: 0.35, path: 0.3 };
 const MAJOR = new Set(["motorway", "trunk", "primary"]);
 const MINOR = new Set(["residential", "service", "path"]);

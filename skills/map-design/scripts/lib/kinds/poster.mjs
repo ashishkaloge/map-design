@@ -16,6 +16,7 @@ import { buildHover, thin, lineData, ringData } from "../hover.mjs";
 const ORDER = ["path", "service", "residential", "tertiary", "secondary", "primary", "trunk", "motorway"];
 const CASED = new Set(["secondary", "primary", "trunk", "motorway"]);
 const BUILDINGS_MAX_BYTES = 8e6;
+const BUILDINGS_MAX_RADIUS_KM = 3;
 const CLASSES_LOW = ["tertiary", "secondary", "primary", "trunk", "motorway"];
 const CLASSES_MEDIUM = ["residential", ...CLASSES_LOW];
 const RAD = Math.PI / 180;
@@ -167,10 +168,14 @@ export async function renderPoster(spec, { base = process.cwd(), embedFonts: emb
   if (showParks && layers.parks.length) parts.push(`<path d="${layers.parks.map(polyPath).join("")}" fill="${theme.park}" fill-rule="${fillRule}"/>`);
   if (showWater && layers.water.length) parts.push(`<path d="${layers.water.map(polyPath).join("")}" fill="${theme.water}" fill-rule="${fillRule}"/>`);
   if (showWater && layers.rivers.length) parts.push(`<path d="${linePaths(layers.rivers.map((r) => r.line))}" fill="none" stroke="${theme.water}" stroke-width="${n(3 * W / 1200, 2)}" stroke-linecap="round" stroke-linejoin="round"/>`);
-  if (spec.layers?.buildings !== false && layers.buildings?.length) {
+  // Footprints read as blocks up to a 3 km radius; wider, they turn into a haze
+  // that dulls the streets, and a dense centre has hundreds of thousands of them.
+  // Either way "layers": { "buildings": true } draws them.
+  const wantBuildings = spec.layers?.buildings === true || (spec.layers?.buildings !== false && radiusKm <= BUILDINGS_MAX_RADIUS_KM);
+  if (layers.buildings?.length && spec.layers?.buildings !== false && !wantBuildings) {
+    report.notes.push(`Building footprints are drawn up to radiusKm ${BUILDINGS_MAX_RADIUS_KM}; set "layers": { "buildings": true } to draw them here.`);
+  } else if (wantBuildings && layers.buildings?.length) {
     const d = layers.buildings.map((b) => polyPath(b.rings)).join("");
-    // Every footprint is its own ring; a dense city centre wider than about 6 km
-    // has hundreds of thousands. Past 8 MB they are left out unless asked for.
     if (d.length > BUILDINGS_MAX_BYTES && spec.layers?.buildings !== true) {
       report.notes.push(`Buildings left out: ${(d.length / 1e6).toFixed(1)} MB of footprints at this size. Set "layers": { "buildings": true } to draw them anyway.`);
     } else if (d) parts.push(`<path class="buildings" d="${d}" fill="${theme.building}" fill-rule="${fillRule}"/>`);
@@ -183,8 +188,9 @@ export async function renderPoster(spec, { base = process.cwd(), embedFonts: emb
   for (const cls of ORDER) {
     const lines = layers.roads[cls];
     if (!lines?.length) continue;
-    // Where footpaths are the streets, draw them like streets.
-    const style = carFree && cls === "path" ? theme.roads.residential : theme.roads[cls];
+    // Where footpaths are the streets, draw them like streets, in the stronger
+    // local-road tone so a car-free centre does not fade out.
+    const style = carFree && cls === "path" ? { color: theme.roads.tertiary.color, width: theme.roads.residential.width } : theme.roads[cls];
     const faint = !carFree && (cls === "service" || cls === "path");
     const d = linePaths(lines);
     if (!d) continue;

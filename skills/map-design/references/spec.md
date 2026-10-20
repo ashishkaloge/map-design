@@ -223,7 +223,7 @@ The report prints the total great-circle length in km and miles.
 | `lang` | Language tag for the capitalised title lines, e.g. `"tr"`. Defaults from the country: Turkish and Azerbaijani keep the dotted İ, Greek drops accents. |
 | `coords` | `false` hides the coordinate line. |
 | `detail` | `low` (major roads), `medium` (default; all streets), `high` (adds service roads and paths). With the Overpass source, areas wider than 9 km default to `low`. |
-| `layers` | `{ "water": false, "parks": false, "rail": false, "buildings": false }` to hide layers; `"buildings": true` draws footprints even past the size cap. |
+| `layers` | `{ "water": false, "parks": false, "rail": false, "buildings": false }` to hide layers; buildings are drawn up to `radiusKm` 3 by default, and `"buildings": true` draws them at any size. |
 | `markers` | Labeled pins: `[{ "label": "Juhu Beach" }]` marks the center; add `lon`/`lat` (or `place`) to put a pin elsewhere. Optional `color` and `size`. |
 | `size` | Default `poster` (1200×1600, exported at 3× = 3600×4800). |
 | `overpass` | Another Overpass API endpoint URL. |
