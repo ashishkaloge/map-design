@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { Pbf } from "../skills/map-design/scripts/vendor/vtile.mjs";
 import { decodeTiles, chooseVectorZoom, LIMITS } from "../skills/map-design/scripts/lib/vtiles.mjs";
 import { lonLatToTile, tileToLonLat } from "../skills/map-design/scripts/lib/tiles.mjs";
-import { resolveStreetBasemap } from "../skills/map-design/scripts/lib/streets.mjs";
+import { resolveStreetBasemap, streetBasemap } from "../skills/map-design/scripts/lib/streets.mjs";
 import { render } from "../skills/map-design/scripts/lib/render.mjs";
 import { toHtml } from "../skills/map-design/scripts/lib/html.mjs";
 
@@ -58,8 +58,11 @@ function encodeTile(layers) {
         });
       }
       for (const k of keys) p.writeStringField(3, k);
-      // Integers as sint (field 6); the fixture has no fractional values.
-      for (const v of values) p.writeMessage(4, (___, vp) => (typeof v === "number" ? vp.writeSVarintField(6, v) : vp.writeStringField(1, String(v))));
+      for (const v of values) p.writeMessage(4, (___, vp) => {
+        if (typeof v !== "number") vp.writeStringField(1, String(v));
+        else if (Number.isInteger(v)) vp.writeSVarintField(6, v);
+        else vp.writeDoubleField(3, v);
+      });
       p.writeVarintField(5, 4096);
     });
   }
@@ -156,12 +159,22 @@ test("vector zoom steps down to fit the tile budget", () => {
   assert.equal(LIMITS.parallel, 4);
 });
 
+test("fractional vector properties decode correctly from a sliced Node Buffer", () => {
+  const tile = encodeTile({ building: [{ type: 3, props: { render_height: 12.5 }, parts: [square(100, 100, 200, 200)] }] });
+  const slab = Buffer.alloc(tile.length + 23, 0xff);
+  tile.copy(slab, 23);
+  const sliced = slab.subarray(23);
+  assert.notEqual(sliced.byteOffset, 0);
+  assert.equal(decodeTiles([{ x: TX, y: TY, z: Z, buf: sliced }]).buildings[0].height, 12.5);
+});
+
 test("a poster draws buildings, credits OpenMapTiles and indexes hover details", async () => {
   const r = await render({ kind: "poster", center, radiusKm: 0.35, title: "Testville", theme: "paper" }, opts);
   assert.match(r.svg, /class="buildings"/);
   assert.match(r.svg, /class="road primary"/);
-  assert.match(r.svg, /© OpenMapTiles © OpenStreetMap contributors/);
+  assert.match(r.svg, /© OpenMapTiles\.org © OpenStreetMap contributors/);
   assert.ok(r.report.notes.some((n) => /vector tiles at zoom 14/.test(n)));
+  assert.ok(r.report.notes.some((n) => /from the configured vector source/.test(n)));
   const names = r.interactive.items.map((i) => `${i.n} | ${i.i}`);
   assert.ok(names.some((n) => /^Grand Avenue \| Main road · D1 · \d+ m in view$/.test(n)), names.join("\n"));
   assert.ok(names.some((n) => /^City Museum \| Museum · about 24 m tall$/.test(n)));
@@ -202,6 +215,25 @@ test("the streets basemap draws themed vector streets under data maps", async ()
   assert.ok(r.interactive.items.some((i) => i.n === "Grand Avenue"));
   assert.throws(() => resolveStreetBasemap({ preset: "streets", url: "https://x/{z}/{x}/{y}" }), /not an option/);
   assert.throws(() => resolveStreetBasemap({ preset: "streets", maxTiles: 5000 }), /maxTiles/);
+  const hitsBeforeExplicitZoom = hits;
+  await assert.rejects(render({
+    ...spec,
+    region: [center[0] - 0.1, center[1] - 0.1, center[0] + 0.1, center[1] + 0.1],
+    basemap: { preset: "streets", zoom: 14, maxTiles: 1 },
+  }, opts), /more than 1 vector tiles even at zoom 14/);
+  assert.equal(hits, hitsBeforeExplicitZoom, "an explicit over-budget zoom fails before any network access");
+});
+
+test("a streets frame across the dateline uses its short longitude span", async () => {
+  const wrap = (lon) => ((lon + 540) % 360) - 180;
+  const projection = ([lon, lat]) => [100 + wrap(lon - 180) * 1000, 100 - lat * 1000];
+  projection.invert = ([x, y]) => [wrap(180 + (x - 100) / 1000), (100 - y) / 1000];
+  const r = await streetBasemap({
+    cfg: resolveStreetBasemap({ preset: "streets", zoom: 4 }),
+    theme: { land: "#ffffff", text: "#222222", ocean: "#aabbcc" },
+    projection, rect: [[0, 0], [200, 200]], log: () => {},
+  });
+  assert.ok(r.notes.some((note) => /4 vector tiles at zoom 4/.test(note)));
 });
 
 test("the HTML page embeds hover details without breaking out of the script", () => {

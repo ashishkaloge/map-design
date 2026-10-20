@@ -61,8 +61,8 @@ renderer supplies real geography and cartography.
 
 | Map | The agent writes | The renderer draws |
 | --- | --- | --- |
-| [Lisbon poster](examples/lisbon/spec.json) | a 93-byte spec | 1 MB of paths: every street in an 8 km frame, the Tagus and its parks, with 2,990 named streets, parks and waterways on hover |
-| [Tokyo poster](examples/tokyo/spec.json) | 89 bytes | 1.2 MB: every street around the Imperial Palace, 1,433 of them named on hover |
+| [Lisbon poster](examples/lisbon/spec.json) | a 93-byte spec | 1 MB of paths: streets in an 8 km frame, the Tagus and its parks, with named features on hover |
+| [Tokyo poster](examples/tokyo/spec.json) | 89 bytes | 1.2 MB: streets around the Imperial Palace, with names from the source data on hover |
 | [US population change](examples/us-population-change/spec.json) | 661 bytes and a Census CSV | 50 states and DC, classed, labeled, with legend and source |
 | [Voyage of HMS Beagle](examples/beagle-voyage/spec.json) | 22 stops | great-circle legs on an equal-area projection, numbered and dated |
 
@@ -202,8 +202,9 @@ node skills/map-design/scripts/map.mjs themes
 Every map is one SVG with its fonts embedded, so it looks the same in a
 browser, a slide or a print shop. The HTML adds hover details that outline the
 feature under the cursor (a country and its value, or on posters and street
-basemaps a street's name, class and length, a park's area, a landmark's height),
-zoom and pan, and SVG and PNG download buttons. It makes no network requests.
+basemaps a street's name, class and length, a park's area, or a landmark's estimated
+height where available), zoom and pan, and SVG and PNG download buttons.
+It makes no network requests.
 
 A spec is short:
 
@@ -243,9 +244,10 @@ Design guidance the agent follows: [cartography.md](skills/map-design/references
 
 Posters read streets, buildings, water, parks and rail from OpenStreetMap vector
 tiles (the OpenMapTiles schema, served free by [OpenFreeMap](https://openfreemap.org))
-and cache them, so a re-render with another theme is offline. Roads fade by class,
-blocks fill with building footprints in frames up to about 6 km across, and
-whole-city frames up to 60 km wide keep every street. If the tile service is
+and cache them, so a re-render with the same cached tiles can work offline.
+Roads fade by class, blocks fill with building footprints in frames up to about 6 km across, and
+whole-city frames up to 60 km wide retain residential roads where the chosen
+zoom and detail level include them. If the tile service is
 unreachable, posters fall back to one query to the public Overpass API. Car-free
 centers such as Venice automatically get footpaths.
 

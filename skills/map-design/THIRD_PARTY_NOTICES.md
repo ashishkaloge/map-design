@@ -47,9 +47,11 @@ license text is in [polylabel-LICENSE](scripts/vendor/licenses/polylabel-LICENSE
   vector tiles in the [OpenMapTiles](https://openmaptiles.org/) schema served by
   [OpenFreeMap](https://openfreemap.org/), or from the Overpass API as a fallback.
   OpenStreetMap data is © OpenStreetMap contributors and available under the Open
-  Database License 1.0; the OpenMapTiles schema is credited as © OpenMapTiles.
-  Maps print both credits and the copyright URL. Downloads are not bundled in
-  this skill.
+  Database License 1.0. The OpenMapTiles schema's design is licensed under
+  [CC BY 4.0](https://github.com/openmaptiles/openmaptiles/blob/master/LICENSE.md).
+  Vector maps print © OpenMapTiles.org, © OpenStreetMap contributors and the
+  OpenStreetMap copyright URL. Overpass-only posters print the OpenStreetMap
+  credit. Downloads are not bundled in this skill.
 - Repository examples: `examples/us-population-change/states.csv` is derived
   from the US Census Bureau Vintage 2024 population estimates (public domain).
   Other examples use the bundled Natural Earth and OurAirports data, or cite

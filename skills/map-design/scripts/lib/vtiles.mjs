@@ -14,17 +14,20 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { gunzipSync } from "node:zlib";
 import { Pbf, VectorTile, classifyRings } from "../vendor/vtile.mjs";
 import { SpecError } from "./errors.mjs";
 import { tileRange } from "./tiles.mjs";
 
 export const OPENFREEMAP = "https://tiles.openfreemap.org/planet";
-export const VECTOR_ATTRIBUTION = "© OpenMapTiles © OpenStreetMap contributors";
-export const LIMITS = { tiles: 3000, bytes: 50 * 1024 * 1024, parallel: 4 };
+export const VECTOR_ATTRIBUTION = "© OpenMapTiles.org © OpenStreetMap contributors";
+export const LIMITS = { tiles: 3000, bytes: 50_000_000, parallel: 4 };
 const UA = "map-design/0.1 (+https://github.com/ashishkaloge/map-design)";
 const TIMEOUT_MS = 30_000;
 const MAX_TILE_BYTES = 4 * 1024 * 1024;
+const MAX_DECODED_BYTES = MAX_TILE_BYTES * 4;
+const MAX_TILEJSON_BYTES = 1024 * 1024;
 const TILEJSON_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 /** TileJSON of the vector source. MAP_DESIGN_TILEJSON points at another
@@ -40,50 +43,72 @@ function cacheRoot() {
 
 const hash = (s) => createHash("sha1").update(s).digest("hex").slice(0, 16);
 
-async function get(url, { accept, maxBytes }) {
-  const res = await fetch(url, { headers: { "user-agent": UA, accept }, signal: AbortSignal.timeout(TIMEOUT_MS), redirect: "error" });
-  if (res.status === 204 || res.status === 404) {
-    await res.body?.cancel().catch(() => {});
-    return { status: res.status, buf: Buffer.alloc(0) };
-  }
-  if (!res.ok) {
-    await res.body?.cancel().catch(() => {});
-    return { status: res.status, buf: null };
-  }
-  const declared = Number(res.headers.get("content-length") ?? 0);
-  if (declared > maxBytes) {
-    await res.body?.cancel().catch(() => {});
-    throw new Error(`response over the ${maxBytes}-byte cap`);
-  }
-  const chunks = [];
-  let total = 0;
-  const reader = res.body.getReader();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.length;
-    if (total > maxBytes) {
-      await reader.cancel().catch(() => {});
-      throw new Error(`response over the ${maxBytes}-byte cap`);
+async function get(url, { accept, maxBytes, signal, onBytes, capError }) {
+  const controller = new AbortController();
+  const abort = () => controller.abort(signal.reason);
+  signal?.addEventListener("abort", abort, { once: true });
+  const timer = setTimeout(() => controller.abort(new Error(`timeout after ${TIMEOUT_MS / 1000} s`)), TIMEOUT_MS);
+  try {
+    signal?.throwIfAborted();
+    const res = await fetch(url, { headers: { "user-agent": UA, accept }, signal: controller.signal, redirect: "error" });
+    if (res.status === 204 || res.status === 404) {
+      await res.body?.cancel().catch(() => {});
+      return { status: res.status, buf: Buffer.alloc(0) };
     }
-    chunks.push(Buffer.from(value));
+    if (!res.ok) {
+      await res.body?.cancel().catch(() => {});
+      return { status: res.status, buf: null };
+    }
+    const declared = Number(res.headers.get("content-length") ?? 0);
+    if (declared > maxBytes) {
+      await res.body?.cancel().catch(() => {});
+      throw capError?.() ?? new Error(`response over the ${maxBytes}-byte cap`);
+    }
+    const chunks = [];
+    let total = 0;
+    const reader = res.body?.getReader();
+    if (!reader) return { status: res.status, buf: Buffer.alloc(0) };
+    for (;;) {
+      signal?.throwIfAborted();
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.length;
+      onBytes?.(value.length);
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => {});
+        throw capError?.() ?? new Error(`response over the ${maxBytes}-byte cap`);
+      }
+      chunks.push(Buffer.from(value));
+    }
+    return { status: res.status, buf: Buffer.concat(chunks) };
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
+    controller.abort();
   }
-  return { status: res.status, buf: Buffer.concat(chunks) };
 }
 
 /** Fetch with retries for busy servers (429, 5xx) and dropped connections. */
 async function getWithRetry(url, opts) {
   let last;
   for (const wait of [0, 1000, 3000]) {
-    if (wait) await new Promise((r) => setTimeout(r, wait));
+    opts.signal?.throwIfAborted();
+    if (wait) await delay(wait, undefined, { signal: opts.signal });
+    const reservation = await opts.budget?.reserve(opts.signal);
     try {
-      const r = await get(url, opts);
+      const r = await get(url, { ...opts, ...reservation });
       if (r.buf) return r.buf;
       last = new Error(`HTTP ${r.status}`);
       if (r.status !== 429 && r.status < 500) break;
     } catch (e) {
-      last = e?.name === "TimeoutError" ? new Error(`timeout after ${TIMEOUT_MS / 1000} s`) : e;
+      if (opts.signal?.aborted) throw opts.signal.reason;
+      if (e instanceof SpecError) throw e;
+      // Fetch/JSON errors can include a configured URL, credentials or response
+      // text. Only our bounded diagnostics are safe to expose in reports.
+      last = /^(response over the \d+-byte cap|timeout after \d+ s)$/.test(e?.message) ? e : new Error("vector source request failed");
       if (/byte cap/.test(last.message)) break;
+    } finally {
+      reservation?.release();
     }
   }
   throw last;
@@ -95,30 +120,95 @@ export async function loadTilejson(url = tilejsonUrl()) {
   let cached = null;
   if (existsSync(file)) {
     try {
-      cached = JSON.parse(readFileSync(file, "utf8"));
-      if (Date.now() - statSync(file).mtimeMs < TILEJSON_MAX_AGE_MS) return checkTilejson(cached, url);
+      const stat = statSync(file);
+      if (stat.size > MAX_TILEJSON_BYTES) throw new Error("cached TileJSON is too large");
+      cached = checkTilejson(JSON.parse(readFileSync(file, "utf8")));
+      if (Date.now() - stat.mtimeMs < TILEJSON_MAX_AGE_MS) return cached;
     } catch {
       cached = null;
     }
   }
   try {
-    const tj = JSON.parse((await getWithRetry(url, { accept: "application/json", maxBytes: 1024 * 1024 })).toString("utf8"));
-    checkTilejson(tj, url);
+    const buf = await getWithRetry(url, { accept: "application/json", maxBytes: MAX_TILEJSON_BYTES });
+    let tj;
+    try {
+      tj = checkTilejson(JSON.parse(buf.toString("utf8")));
+    } catch {
+      throw new Error("The vector source did not return a valid TileJSON with a {z}/{x}/{y} tile URL.");
+    }
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, JSON.stringify(tj));
     return tj;
   } catch (e) {
-    if (cached) return checkTilejson(cached, url);
+    if (cached) return cached;
     throw e;
   }
 }
 
-function checkTilejson(tj, url) {
+function checkTilejson(tj) {
   const t = tj?.tiles?.[0];
-  if (typeof t !== "string" || !/^https?:\/\//i.test(t) || !["{z}", "{x}", "{y}"].every((p) => t.includes(p))) {
-    throw new Error(`${url} is not a vector TileJSON with a {z}/{x}/{y} tile URL`);
+  if (typeof t !== "string" || !["{z}", "{x}", "{y}"].every((p) => t.includes(p)) || !["http:", "https:"].includes(new URL(t).protocol)) {
+    throw new Error("The vector source did not return a valid TileJSON with a {z}/{x}/{y} tile URL.");
   }
   return tj;
+}
+
+// Reserve each request's maximum body size before it starts. Release unused
+// capacity when it finishes; bytes from failed attempts still spend the budget.
+function downloadBudget() {
+  let used = 0, reserved = 0;
+  const waiting = new Set();
+  const capError = () => new SpecError(`Vector tiles for this area pass the source's ${LIMITS.bytes / 1e6} MB download limit. Use a smaller radiusKm or region.`);
+  return {
+    get bytes() { return used; },
+    async reserve(signal) {
+      for (;;) {
+        signal.throwIfAborted();
+        const available = LIMITS.bytes - used - reserved;
+        if (available >= MAX_TILE_BYTES || (available > 0 && !reserved)) {
+          const maxBytes = Math.min(MAX_TILE_BYTES, available);
+          reserved += maxBytes;
+          let spent = 0;
+          return {
+            maxBytes,
+            capError: maxBytes < MAX_TILE_BYTES ? capError : undefined,
+            onBytes(count) { spent += count; used += count; reserved -= count; },
+            release() {
+              reserved -= maxBytes - spent;
+              for (const wake of waiting) wake();
+              waiting.clear();
+            },
+          };
+        }
+        if (!reserved) throw capError();
+        await new Promise((resolve, reject) => {
+          const wake = () => { signal.removeEventListener("abort", abort); resolve(); };
+          const abort = () => { waiting.delete(wake); reject(signal.reason); };
+          waiting.add(wake);
+          signal.addEventListener("abort", abort, { once: true });
+        });
+      }
+    },
+  };
+}
+
+function readVectorTile(buf) {
+  // Pbf's fixed-width reads assume a zero-offset ArrayBuffer, whereas small Node
+  // Buffers often share a slab with a nonzero byteOffset.
+  return new VectorTile(new Pbf(Uint8Array.from(buf)));
+}
+
+function validateTile(buf) {
+  if (!buf.length) return; // 204/404 and valid empty tiles
+  try {
+    const tile = readVectorTile(buf);
+    for (const layer of Object.values(tile.layers)) {
+      if (!(layer.extent > 0)) throw new Error();
+      for (let i = 0; i < layer.length; i++) layer.feature(i).loadGeometry();
+    }
+  } catch {
+    throw new Error("The vector source returned an invalid vector tile.");
+  }
 }
 
 /**
@@ -141,48 +231,69 @@ export function chooseVectorZoom(box, { maxZoom = 14, minZoom = 0, budgets = { 1
  * errors mean the source could not be reached.
  */
 export async function fetchVectorTiles({ zoom, range }, { log = () => {} } = {}) {
-  const tj = await loadTilejson();
+  const count = (range.x1 - range.x0 + 1) * (range.y1 - range.y0 + 1);
+  if (!Number.isSafeInteger(count) || count < 1 || count > LIMITS.tiles) throw new SpecError(`This area exceeds the source's ${LIMITS.tiles} vector tiles per download. Use a smaller area.`);
+  const sourceUrl = tilejsonUrl();
+  const tj = await loadTilejson(sourceUrl);
+  const source = sourceUrl === OPENFREEMAP ? "OpenFreeMap" : "the configured vector source";
   const template = tj.tiles[0];
   const n = 2 ** zoom;
   const jobs = [];
-  for (let x = range.x0; x <= range.x1; x++) for (let y = range.y0; y <= range.y1; y++) jobs.push({ x: ((x % n) + n) % n, y, z: zoom });
-  if (jobs.length > LIMITS.tiles) throw new SpecError(`This area needs ${jobs.length} vector tiles; the source allows ${LIMITS.tiles} per download. Use a smaller area.`);
+  // Keep unwrapped x for geometry, including the half of a dateline frame whose
+  // longitudes lie beyond ±180°. Only network/cache coordinates wrap.
+  for (let x = range.x0; x <= range.x1; x++) for (let y = range.y0; y <= range.y1; y++) jobs.push({ x, y, z: zoom });
   const dir = join(cacheRoot(), hash(template));
   let downloaded = 0;
-  let bytes = 0;
+  const budget = downloadBudget();
+  const controller = new AbortController();
   let cursor = 0;
   const results = new Array(jobs.length);
   let announced = false;
   async function worker() {
-    while (cursor < jobs.length) {
-      const i = cursor++;
-      const { x, y, z } = jobs[i];
-      const file = join(dir, `${z}`, `${x}`, `${y}.pbf`);
-      if (existsSync(file)) {
-        results[i] = { ...jobs[i], buf: readFileSync(file) };
-        continue;
+    try {
+      while (cursor < jobs.length) {
+        controller.signal.throwIfAborted();
+        const i = cursor++;
+        const { y, z } = jobs[i];
+        const x = ((jobs[i].x % n) + n) % n;
+        const file = join(dir, `${z}`, `${x}`, `${y}.pbf`);
+        if (existsSync(file)) {
+          try {
+            if (statSync(file).size > MAX_DECODED_BYTES) throw new Error();
+            const buf = readFileSync(file);
+            validateTile(buf);
+            results[i] = { ...jobs[i], buf };
+            continue;
+          } catch {
+            // A partial/corrupt cache entry must not poison later renders.
+          }
+        }
+        if (!announced) {
+          announced = true;
+          log(`Downloading ${jobs.length} vector tiles at zoom ${zoom} from ${new URL(template).host}…`);
+        }
+        let buf = await getWithRetry(template.replace("{z}", z).replace("{x}", x).replace("{y}", y), {
+          accept: "application/vnd.mapbox-vector-tile, application/x-protobuf, */*",
+          maxBytes: MAX_TILE_BYTES,
+          budget,
+          signal: controller.signal,
+        });
+        downloaded += 1;
+        controller.signal.throwIfAborted();
+        if (buf.length > 2 && buf[0] === 0x1f && buf[1] === 0x8b) buf = gunzipSync(buf, { maxOutputLength: MAX_DECODED_BYTES });
+        validateTile(buf);
+        mkdirSync(dirname(file), { recursive: true });
+        writeFileSync(file, buf);
+        results[i] = { ...jobs[i], buf };
       }
-      if (!announced) {
-        announced = true;
-        log(`Downloading ${jobs.length} vector tiles at zoom ${zoom} from ${new URL(template).host}…`);
-      }
-      let buf = await getWithRetry(template.replace("{z}", z).replace("{x}", x).replace("{y}", y), {
-        accept: "application/vnd.mapbox-vector-tile, application/x-protobuf, */*",
-        maxBytes: MAX_TILE_BYTES,
-      });
-      bytes += buf.length;
-      downloaded += 1;
-      if (bytes > LIMITS.bytes) {
-        throw new SpecError(`Vector tiles for this area pass the source's ${LIMITS.bytes / 1024 / 1024} MB download limit. Use a smaller radiusKm or region.`);
-      }
-      if (buf.length > 2 && buf[0] === 0x1f && buf[1] === 0x8b) buf = gunzipSync(buf, { maxOutputLength: MAX_TILE_BYTES * 4 });
-      mkdirSync(dirname(file), { recursive: true });
-      writeFileSync(file, buf);
-      results[i] = { ...jobs[i], buf };
+    } catch (e) {
+      if (!controller.signal.aborted) controller.abort(e);
+      throw e;
     }
   }
-  await Promise.all(Array.from({ length: Math.min(LIMITS.parallel, jobs.length) }, worker));
-  return { tiles: results, downloaded, bytes, zoom, count: jobs.length, attribution: VECTOR_ATTRIBUTION };
+  await Promise.allSettled(Array.from({ length: Math.min(LIMITS.parallel, jobs.length) }, worker));
+  controller.signal.throwIfAborted();
+  return { tiles: results, downloaded, bytes: budget.bytes, zoom, count: jobs.length, source, attribution: VECTOR_ATTRIBUTION };
 }
 
 // ---------------------------------------------------------------------------
@@ -333,7 +444,7 @@ export function decodeTiles(tiles) {
   const green = [];
   for (const { x: tx, y: ty, z, buf } of tiles) {
     if (!buf?.length) continue;
-    const vt = new VectorTile(new Pbf(buf));
+    const vt = readVectorTile(buf);
     const n = 2 ** z;
     const each = (name, fn) => {
       const layer = vt.layers[name];

@@ -32,6 +32,31 @@ export function ringArea(pts) {
   return a / 2;
 }
 
+/** Clip a screen-space ring to the visible rectangle, preserving its winding. */
+function clipRing(pts, [x0, y0, x1, y1]) {
+  if (!pts.every((p) => p.length === 2 && p.every(Number.isFinite))) return [];
+  for (const [axis, edge, greater] of [[0, x0, true], [0, x1, false], [1, y0, true], [1, y1, false]]) {
+    if (!pts.length) break;
+    const out = [];
+    let prev = pts[pts.length - 1];
+    let prevIn = greater ? prev[axis] >= edge : prev[axis] <= edge;
+    for (const cur of pts) {
+      const curIn = greater ? cur[axis] >= edge : cur[axis] <= edge;
+      if (curIn !== prevIn) {
+        const t = (edge - prev[axis]) / (cur[axis] - prev[axis]);
+        const cross = [prev[0] + t * (cur[0] - prev[0]), prev[1] + t * (cur[1] - prev[1])];
+        cross[axis] = edge;
+        out.push(cross);
+      }
+      if (curIn) out.push(cur);
+      prev = cur;
+      prevIn = curIn;
+    }
+    pts = out;
+  }
+  return pts.length >= 3 && Math.abs(ringArea(pts)) > 0 ? pts : [];
+}
+
 export function lineLength(pts) {
   let l = 0;
   for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
@@ -125,7 +150,7 @@ export function buildHover(layers, { drawn, carFree = false, toScreen, view, tol
     for (const l of lines) for (const piece of clipPolyline(l.map(toScreen), view)) out.push(thin(piece.coords, tol));
     return out;
   };
-  const ringShapes = (rings) => rings.map((r) => r.map(toScreen));
+  const ringShapes = (rings) => rings.map((r) => clipRing(r.map(toScreen), view)).filter((r) => r.length);
   const add = (item) => item && items.push(item);
   const english = (en) => (en ? `English: ${en}` : null);
 
@@ -163,7 +188,7 @@ export function buildHover(layers, { drawn, carFree = false, toScreen, view, tol
       groups.set(key, g);
     }
     for (const g of groups.values()) {
-      const shapes = g.shapes.filter((r) => r.some(([x, y]) => x >= view[0] && x <= view[2] && y >= view[1] && y <= view[3]));
+      const shapes = g.shapes;
       const ha = Math.abs(shapes.reduce((t, r) => t + ringArea(r), 0)) * kmPerPx * kmPerPx * 100;
       add(hoverItem("area", g.name, describe(g, ha), shapes));
     }
@@ -175,11 +200,10 @@ export function buildHover(layers, { drawn, carFree = false, toScreen, view, tol
     const plain = layers.buildings.filter((b) => !b.name && b.height);
     if (plain.length <= UNNAMED_BUILDINGS_MAX) {
       for (const b of plain) {
-        const shapes = ringShapes(b.rings).filter((r) => r.some(([x, y]) => x >= view[0] && x <= view[2] && y >= view[1] && y <= view[3]));
+        const shapes = ringShapes(b.rings);
         add(hoverItem("area", "Building", `about ${Math.round(b.height)} m tall`, shapes));
       }
     }
   }
   return items;
 }
-

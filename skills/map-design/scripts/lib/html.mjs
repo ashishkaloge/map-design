@@ -73,15 +73,16 @@ export function toHtml({ svg, width, height, title, dark = false, bg, fileBase =
     });
     if (it.k === "a") {
       it.area = 0;
-      for (const r of it.g) { let a = 0; for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) a += (r[j] + r[i]) * (r[j + 1] - r[i + 1]); it.area += Math.abs(a / 2); }
+      for (const r of it.g) { let a = 0; for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) a += (r[j] + r[i]) * (r[j + 1] - r[i + 1]); it.area += a / 2; }
+      it.area = Math.abs(it.area);
     }
   }
   // Grid index over segment and ring bounding boxes.
-  const CELL = 24, cols = Math.ceil(VB.width / CELL) + 1;
+  const CELL = 24, cols = Math.ceil(VB.width / CELL) + 1, rows = Math.ceil(VB.height / CELL) + 1;
   const grid = new Map();
   const put = (i, x0, y0, x1, y1) => {
-    const c0 = Math.max(0, Math.floor(x0 / CELL)), c1 = Math.floor(x1 / CELL);
-    const r0 = Math.max(0, Math.floor(y0 / CELL)), r1 = Math.floor(y1 / CELL);
+    const c0 = Math.max(0, Math.floor((x0 - VB.x) / CELL)), c1 = Math.min(cols - 1, Math.floor((x1 - VB.x) / CELL));
+    const r0 = Math.max(0, Math.floor((y0 - VB.y) / CELL)), r1 = Math.min(rows - 1, Math.floor((y1 - VB.y) / CELL));
     for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
       const k = r * cols + c, list = grid.get(k);
       if (!list) grid.set(k, [i]); else if (list[list.length - 1] !== i) list.push(i);
@@ -104,11 +105,11 @@ export function toHtml({ svg, width, height, title, dark = false, bg, fileBase =
     return Math.hypot(px - ax - t * dx, py - ay - t * dy);
   };
   const inside = (it, x, y) => {
-    let n = false;
+    let winding = 0;
     for (const r of it.g) for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) {
-      if ((r[i + 1] > y) !== (r[j + 1] > y) && x < ((r[j] - r[i]) * (y - r[i + 1])) / (r[j + 1] - r[i + 1]) + r[i]) n = !n;
+      if ((r[i + 1] > y) !== (r[j + 1] > y) && x < ((r[j] - r[i]) * (y - r[i + 1])) / (r[j + 1] - r[i + 1]) + r[i]) winding += r[j + 1] > r[i + 1] ? 1 : -1;
     }
-    return n;
+    return winding !== 0;
   };
   // A line within half the reach wins over the area the cursor is in; past that
   // the area wins. Among areas the smallest one containing the point wins, so a
@@ -116,8 +117,8 @@ export function toHtml({ svg, width, height, title, dark = false, bg, fileBase =
   function pick(x, y, tol) {
     const seen = new Set();
     let best = null, score = Infinity;
-    const c0 = Math.floor((x - tol) / CELL), c1 = Math.floor((x + tol) / CELL);
-    const r0 = Math.floor((y - tol) / CELL), r1 = Math.floor((y + tol) / CELL);
+    const c0 = Math.max(0, Math.floor((x - VB.x - tol) / CELL)), c1 = Math.min(cols - 1, Math.floor((x - VB.x + tol) / CELL));
+    const r0 = Math.max(0, Math.floor((y - VB.y - tol) / CELL)), r1 = Math.min(rows - 1, Math.floor((y - VB.y + tol) / CELL));
     for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
       for (const i of grid.get(r * cols + c) ?? []) {
         if (seen.has(i)) continue;

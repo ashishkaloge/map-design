@@ -69,14 +69,16 @@ export async function renderPoster(spec, { base = process.cwd(), embedFonts: emb
   const [west, south] = unproject([-W * 0.03, -H * 0.03]);
   const [east, north] = unproject([W * 1.03, H * 1.03]);
 
+  // Validate download and title options in check mode too, before any I/O.
+  if (spec.source != null && !["auto", "vector", "overpass"].includes(spec.source)) throw new SpecError('source must be "auto", "vector" or "overpass".');
+  if (spec.detail != null && !["low", "medium", "high"].includes(spec.detail)) throw new SpecError('detail must be "low", "medium" or "high".');
+  const locale = titleLocale(spec.lang, countryCode ?? countryAt(center[0], center[1]));
   if (check) {
     report.notes.push(`Frame: ${south.toFixed(4)}, ${west.toFixed(4)} to ${north.toFixed(4)}, ${east.toFixed(4)} (south, west, north, east).`);
     return { svg: "", report, width: W, height: H, theme, spec };
   }
   // A local Overpass JSON export can stand in for the download.
   const source = spec.osm ? "file" : spec.source ?? "auto";
-  if (!["auto", "vector", "overpass", "file"].includes(source)) throw new SpecError('source must be "auto", "vector" or "overpass".');
-  if (spec.detail != null && !["low", "medium", "high"].includes(spec.detail)) throw new SpecError('detail must be "low", "medium" or "high".');
   let layers;
   let carFree = false;
   let credit = "© OpenStreetMap contributors";
@@ -88,7 +90,7 @@ export async function renderPoster(spec, { base = process.cwd(), embedFonts: emb
       layers = decodeTiles(got.tiles);
       credit = got.attribution;
       report.notes.push(
-        `Map data: ${got.count} vector tiles at zoom ${got.zoom} from OpenFreeMap (OpenMapTiles schema)${got.downloaded ? `, ${got.downloaded} downloaded (${(got.bytes / 1e6).toFixed(1)} MB)` : ", all cached"}.`,
+        `Map data: ${got.count} vector tiles at zoom ${got.zoom} from ${got.source} (OpenMapTiles schema)${got.downloaded ? `, ${got.downloaded} downloaded (${(got.bytes / 1e6).toFixed(1)} MB)` : ", all cached"}.`,
       );
       // Zoom 13 and below keep only the largest buildings; specks would read as noise.
       if (got.zoom < 14) {
@@ -206,11 +208,10 @@ export async function renderPoster(spec, { base = process.cwd(), embedFonts: emb
     drawn: new Set(Object.keys(layers.roads)), carFree, toScreen: (p) => {
       const [x, y] = project(p);
       return [x, H - y];
-    }, view, tol, kmPerPx, showParks, showWater, buildingsDrawn: parts.some((p) => p.startsWith('<path class="buildings"')),
+    }, view: rect, tol, kmPerPx, showParks, showWater, buildingsDrawn: parts.some((p) => p.startsWith('<path class="buildings"')),
   });
 
   // Typography.
-  const locale = titleLocale(spec.lang, countryCode ?? countryAt(center[0], center[1]));
   const title = upper(spec.title ?? placeName, locale);
   const subtitle = spec.subtitle === false ? "" : upper(String(countryName ?? ""), locale);
   const u = W / 1200;

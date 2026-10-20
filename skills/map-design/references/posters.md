@@ -28,7 +28,7 @@ Output: `lisbon-azulejo.html`, `.svg`, and a 3600×4800 `.png` (12×16 in at
 | Old town, island, campus | 1.5–3 |
 | City center (Paris inside the Périphérique ≈ 5) | 3–6 |
 | Whole city | 6–10 |
-| Metro area (major roads only) | 10–20 |
+| Metro area (road detail depends on source and zoom) | 10–30 |
 
 The gazetteer point for a city is its official center, which may not be the
 most interesting frame. Use `center: [lon, lat]` or `offset: [dLon, dLat]` to
@@ -79,9 +79,9 @@ pin lands there or outside the frame.
 2. Streets, buildings, water, parks and rail inside the frame download as
    OpenStreetMap vector tiles (OpenMapTiles schema) from OpenFreeMap and are cached
    in `~/.cache/map-design/vector` (override the base with `MAP_DESIGN_CACHE`).
-   Re-rendering with another theme is offline. Frames up to about 11 km wide use
-   zoom 14, which carries building footprints; larger frames use zoom 13 or 12,
-   which still carry every residential street.
+   Re-rendering with the same cached tiles can work offline. The zoom decreases
+   to fit the tile budget: smaller frames usually use zoom 14, which carries
+   building footprints; wider frames use lower zooms and may omit finer detail.
 3. If the tile service is unreachable, one query goes to the public Overpass API
    instead and the sea is rebuilt from OpenStreetMap coastline ways. `"source":
    "overpass"` always uses Overpass; `"source": "vector"` never falls back.
@@ -98,7 +98,8 @@ pin lands there or outside the frame.
 The HTML page names what is under the cursor and outlines it in the theme's
 accent colour: a street's name, class, route number and length in view; a river or
 canal; a park, garden or cemetery and its area; a landmark building (museum,
-monument, place of worship…) and its height. Names come from the tiles, and green
+monument, place of worship…) and its estimated height when available. Names come
+from the tiles; unnamed or unsupported features have no named hover target. Green
 areas and buildings take the name of the point of interest inside them. Pins show
 their label and coordinates. The index is in the HTML only; the SVG and PNG stay
 clean.
@@ -111,11 +112,14 @@ of the country under `center`; `"lang": "tr"` overrides it.
 
 ## Etiquette and limits
 
-- OpenFreeMap is free and donation-funded. Its terms allow at most 3,000 tiles or
-  50 MB per download; a dense 10 km frame at zoom 14 is about 80 tiles and 33 MB.
+- OpenFreeMap is free and donation-funded. Its
+  [terms](https://openfreemap.org/tos/) allow at most 3,000 tiles or 50 MB per
+  download; tile counts and download sizes depend on latitude and local density.
   The renderer enforces the limits and asks for a smaller radius past them.
 - The public Overpass API, the fallback, is shared and free. One poster is one
   query. Do not loop over many cities without pauses, and use the cache.
-- Keep "© OpenMapTiles © OpenStreetMap contributors" on the poster. The
-  OpenStreetMap credit is required by the Open Database License.
+- Keep "© OpenMapTiles.org © OpenStreetMap contributors" on vector posters.
+  The OpenMapTiles schema's design attribution and OpenStreetMap's Open Database
+  License credit apply to the downloaded data; Overpass-only posters need the
+  OpenStreetMap credit.
 - Tunnels and subways are left out so the street pattern stays readable.

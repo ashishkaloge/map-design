@@ -41,13 +41,15 @@ export function resolveStreetBasemap(basemap) {
 /** Lon/lat bounds of a pixel rect, sampled along its edges. */
 function frameBox(projection, [[x0, y0], [x1, y1]]) {
   let west = Infinity, east = -Infinity, south = Infinity, north = -Infinity;
+  const center = projection.invert([(x0 + x1) / 2, (y0 + y1) / 2])?.[0] ?? 0;
   for (let i = 0; i <= 16; i++) {
     const t = i / 16;
     for (const p of [[x0 + t * (x1 - x0), y0], [x0 + t * (x1 - x0), y1], [x0, y0 + t * (y1 - y0)], [x1, y0 + t * (y1 - y0)]]) {
       const ll = projection.invert(p);
       if (!ll || !ll.every(Number.isFinite)) continue;
-      west = Math.min(west, ll[0]);
-      east = Math.max(east, ll[0]);
+      const lon = center + ((ll[0] - center + 540) % 360) - 180;
+      west = Math.min(west, lon);
+      east = Math.max(east, lon);
       south = Math.min(south, ll[1]);
       north = Math.max(north, ll[1]);
     }
@@ -69,10 +71,11 @@ export async function streetBasemap({ cfg, theme, projection, rect, log }) {
   const cy = (y0 + y1) / 2;
   const a = projection.invert([cx, cy]);
   const b = projection.invert([cx + 1, cy]);
-  const metersPerPx = Math.hypot((b[0] - a[0]) * 111320 * Math.cos((a[1] * Math.PI) / 180), (b[1] - a[1]) * 110540);
+  const deltaLon = ((b[0] - a[0] + 540) % 360) - 180;
+  const metersPerPx = Math.hypot(deltaLon * 111320 * Math.cos((a[1] * Math.PI) / 180), (b[1] - a[1]) * 110540);
   const ideal = Math.log2((40075016 * Math.cos((a[1] * Math.PI) / 180)) / (256 * metersPerPx));
   const want = cfg.zoom ?? Math.max(0, Math.min(14, Math.round(ideal) + 1));
-  const pick = chooseVectorZoom(box, { maxZoom: want, budgets: {}, maxTiles: cfg.maxTiles });
+  const pick = chooseVectorZoom(box, { maxZoom: want, minZoom: cfg.zoom ?? 0, budgets: {}, maxTiles: cfg.maxTiles });
   const got = await fetchVectorTiles(pick, { log });
   const layers = decodeTiles(got.tiles);
 
@@ -106,9 +109,9 @@ export async function streetBasemap({ cfg, theme, projection, rect, log }) {
     drawn.add(cls);
     add(`streets-road ${cls}`, d, `fill="none" stroke="${ink(TONE[cls])}" stroke-width="${n(WIDTH[cls] * unit, 2)}" stroke-linecap="round" stroke-linejoin="round"`);
   }
-  const hover = buildHover(layers, { drawn, toScreen, view, tol, kmPerPx: metersPerPx / 1000 });
+  const hover = buildHover(layers, { drawn, toScreen, view: [x0, y0, x1, y1], tol, kmPerPx: metersPerPx / 1000 });
   const notes = [
-    `basemap: ${got.count} vector tiles at zoom ${got.zoom} from OpenFreeMap${got.downloaded ? `, ${got.downloaded} downloaded (${(got.bytes / 1e6).toFixed(1)} MB)` : ", all cached"} (${VECTOR_ATTRIBUTION})`,
+    `basemap: ${got.count} vector tiles at zoom ${got.zoom} from ${got.source}${got.downloaded ? `, ${got.downloaded} downloaded (${(got.bytes / 1e6).toFixed(1)} MB)` : ", all cached"} (${VECTOR_ATTRIBUTION})`,
   ];
   if (hover.length) notes.push(`Hover details in the HTML: ${hover.length} named streets, waterways and parks.`);
   const style = cfg.opacity < 1 ? ` opacity="${n(cfg.opacity, 2)}"` : "";

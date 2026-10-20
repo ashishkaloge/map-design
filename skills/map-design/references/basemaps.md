@@ -18,17 +18,22 @@ basemap stays quiet under the data. It keeps the map's own projection, stays sha
 at any export size, and replaces the bundled 1:50m coastline with the real one.
 Named streets, waterways and parks get hover details in the HTML.
 
-- The zoom follows the map's scale and steps down until the tile count fits
-  `maxTiles` (default 144, at most 3,000). `zoom` (0–14) sets it explicitly.
+- Automatic zoom follows the map's scale and steps down until the tile count
+  fits `maxTiles` (default 144, at most 3,000). An explicit `zoom` (0–14)
+  is preserved; if it exceeds the tile budget, rendering fails before downloading.
 - It is meant for city and regional frames; frames wider than 60° of longitude
   are rejected.
-- Tiles are cached under `~/.cache/map-design/vector` and reused, so re-rendering
-  is offline. `MAP_DESIGN_TILEJSON` points at another OpenMapTiles-schema source,
-  such as your own tile server.
+- Tiles are cached under `~/.cache/map-design/vector` and reused. A render can work
+  offline when its tiles and TileJSON are cached; source metadata is refreshed
+  after 12 hours, with a stale copy used if the source is unreachable.
+  `MAP_DESIGN_TILEJSON` points at another OpenMapTiles-schema source, such as your
+  own tile server. Verify that the source permits the intended downloads and that
+  its required attribution is covered by the generated footer; extra attribution
+  in a custom TileJSON is not automatically included.
 - [OpenFreeMap's terms](https://openfreemap.org/tos/) allow downloads from apps
   of at most 3,000 tiles or 50 MB, four requests at a time, with an identifying
   User-Agent; the renderer enforces all three. Commercial use is allowed. The
-  footer credits © OpenMapTiles and © OpenStreetMap contributors with the
+  footer credits © OpenMapTiles.org and © OpenStreetMap contributors with the
   copyright URLs; keep them visible.
 - If the tile service cannot be reached, the map falls back to the bundled
   geography and the report says so.

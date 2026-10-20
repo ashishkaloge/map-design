@@ -155,9 +155,11 @@ ground: 1.5–3 for an old town (building footprints fill the blocks), 4–6 for
 center, 10–30 for a whole metro as fine street lace. Add `--pin "Label"` (or
 `markers` in a spec) to mark a spot. Neighborhoods and landmarks need
 coordinates: ask the user rather than guessing. Posters download OpenStreetMap
-vector tiles from OpenFreeMap (Overpass as fallback), cache them, and must keep the
-"© OpenMapTiles © OpenStreetMap contributors" credit. The HTML names every street,
-park and landmark on hover. Details: [references/posters.md](references/posters.md).
+vector tiles from OpenFreeMap (Overpass as fallback) and cache them. Keep the
+generated credit: "© OpenMapTiles.org © OpenStreetMap contributors" for vector
+tiles, or "© OpenStreetMap contributors" for Overpass. The HTML shows hover
+details for supported features with names in the source data.
+Details: [references/posters.md](references/posters.md).
 
 ## When something goes wrong
 
