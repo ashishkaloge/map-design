@@ -18,6 +18,17 @@ ships the following third-party code, data and fonts.
   Copyright 2012-2019 Michael Bostock, ISC License. Complete text:
   [topojson-client-LICENSE](scripts/vendor/licenses/topojson-client-LICENSE).
 
+`scripts/vendor/vtile.mjs` bundles the vector tile decoder:
+
+- [pbf](https://github.com/mapbox/pbf) 4.0.2, Copyright (c) 2024 Mapbox,
+  BSD 3-Clause License. Complete text: [pbf-LICENSE](scripts/vendor/licenses/pbf-LICENSE).
+- [@mapbox/vector-tile](https://github.com/mapbox/vector-tile-js) 2.0.5,
+  Copyright (c) 2024 Mapbox, BSD 3-Clause License. Complete text:
+  [mapbox-vector-tile-LICENSE](scripts/vendor/licenses/mapbox-vector-tile-LICENSE).
+- [@mapbox/point-geometry](https://github.com/mapbox/point-geometry) 1.1.0,
+  Copyright (c) 2024 Mapbox, ISC License. Complete text:
+  [mapbox-point-geometry-LICENSE](scripts/vendor/licenses/mapbox-point-geometry-LICENSE).
+
 `scripts/lib/polylabel.mjs` follows the polylabel algorithm by Vladimir
 Agafonkin (Mapbox), ISC License, Copyright (c) 2016 Mapbox. The upstream
 license text is in [polylabel-LICENSE](scripts/vendor/licenses/polylabel-LICENSE).
