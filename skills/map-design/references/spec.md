@@ -18,7 +18,7 @@ Paths in `data`, `stops` and `flows` are relative to the spec file.
 | `size` | string or object | by region shape | `landscape` 1600×1000, `wide` 1600×900, `square` 1200×1200, `portrait` 1200×1500, `story` 1080×1920, `poster` 1200×1600, `a4`, or `{ "width", "height" }` |
 | `region` | see below | by kind | What the map frames. |
 | `projection` | string or object | automatic | `equal-earth`, `natural-earth`, `globe`, `orthographic`, `albers-usa`, `albers`, `conic-equal-area`, `conic-conformal`, `azimuthal-equal-area`, `mercator`, `transverse-mercator`, `equirectangular`, `stereographic`. Object form: `{ "name", "rotate": [λ, φ], "parallels": [a, b] }`. |
-| `basemap` | string or object | none | Raster tiles drawn under the data: `"osm"`, `"osm-hot"` (keyless), the aliases `"light"`, `"dark"`, `"voyager"`, the CARTO presets `"carto-light"`/`"carto-dark"`/`"carto-voyager"` (need an API key), or `{ preset, url, attribution, zoom, maxTiles, maxZoom, opacity, filter, cache }`. Forces `mercator` (tiles are Web Mercator) and credits the source in the footer. A custom `url` is http(s) with `{z}/{x}/{y}`. `zoom`, `maxZoom` and `maxTiles` are bounded integers (`maxTiles` ≤ 4096); the tile budget is enforced even with an explicit `zoom`. `opacity` is 0-1; `filter` accepts plain CSS filter functions only. Invalid values are spec errors. See [provider and cache requirements](basemaps.md). |
+| `basemap` | string or object | none | `"streets"`: vector streets, water, parks and buildings in the theme's colours, any projection, with hover names (`{ preset: "streets", maxTiles, zoom, opacity }`). Or raster tiles drawn under the data: `"osm"`, `"osm-hot"` (keyless), the aliases `"light"`, `"dark"`, `"voyager"`, the CARTO presets `"carto-light"`/`"carto-dark"`/`"carto-voyager"` (need an API key), or `{ preset, url, attribution, zoom, maxTiles, maxZoom, opacity, filter, cache }`. Raster tiles force `mercator` (tiles are Web Mercator) and credits the source in the footer. A custom `url` is http(s) with `{z}/{x}/{y}`. `zoom`, `maxZoom` and `maxTiles` are bounded integers (`maxTiles` ≤ 4096); the tile budget is enforced even with an explicit `zoom`. `opacity` is 0-1; `filter` accepts plain CSS filter functions only. Invalid values are spec errors. See [provider and cache requirements](basemaps.md). |
 | `antarctica` | boolean | `false` | World maps crop Antarctica unless true. |
 | `graticule` | boolean | by theme | Latitude and longitude lines. |
 | `rivers` | boolean | by theme | Major rivers. |
@@ -219,9 +219,11 @@ The report prints the total great-circle length in km and miles.
 | `radiusKm` | Half the poster width on the ground (0.3–30, default 4). |
 | `theme` | `noir`, `paper`, `blueprint`, `sumi`, `terracotta`, `azulejo`, `neon`, `forest`, `mono`. |
 | `title` / `subtitle` | Override the city and country lines; `"subtitle": false` hides it. |
+| `source` | `auto` (default: OpenFreeMap vector tiles, Overpass if they are unreachable), `vector` or `overpass`. |
+| `lang` | Language tag for the capitalised title lines, e.g. `"tr"`. Defaults from the country: Turkish and Azerbaijani keep the dotted İ, Greek drops accents. |
 | `coords` | `false` hides the coordinate line. |
-| `detail` | `low` (major roads), `medium` (default; all streets), `high` (adds service roads and paths). Areas wider than 9 km default to `low`. |
-| `layers` | `{ "water": false, "parks": false, "rail": false }` to hide layers. |
+| `detail` | `low` (major roads), `medium` (default; includes residential roads), `high` (adds service roads and paths). Availability depends on the source and zoom. With the Overpass source, areas wider than 9 km default to `low`. |
+| `layers` | `{ "water": false, "parks": false, "rail": false, "buildings": false }` to hide layers; buildings are drawn up to `radiusKm` 3 by default, and `"buildings": true` draws them at any size. |
 | `markers` | Labeled pins: `[{ "label": "Juhu Beach" }]` marks the center; add `lon`/`lat` (or `place`) to put a pin elsewhere. Optional `color` and `size`. |
 | `size` | Default `poster` (1200×1600, exported at 3× = 3600×4800). |
 | `overpass` | Another Overpass API endpoint URL. |

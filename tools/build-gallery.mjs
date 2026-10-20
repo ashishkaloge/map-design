@@ -27,7 +27,7 @@ for (const name of readdirSync(join(root, "examples")).sort()) {
   const r = await render(spec, { base: dir });
   const ms = Date.now() - t0;
   writeFileSync(join(outDir, `${name}.svg`), r.svg);
-  writeFileSync(join(outDir, `${name}.html`), toHtml({ svg: r.svg, width: r.width, height: r.height, title: spec.title ?? name, dark: r.theme?.dark, bg: r.theme?.bg, fileBase: name }));
+  writeFileSync(join(outDir, `${name}.html`), toHtml({ svg: r.svg, width: r.width, height: r.height, title: spec.title ?? name, dark: r.theme?.dark, bg: r.theme?.bg, fileBase: name, features: r.interactive?.items, accent: r.interactive?.accent ?? r.theme?.accent }));
   const png = join(outDir, `${name}.png`);
   const ok = exportPng(r.svg, r.width, r.height, png, { scale: 1 });
   if (!ok.ok) throw new Error(`${name}: ${ok.reason}`);

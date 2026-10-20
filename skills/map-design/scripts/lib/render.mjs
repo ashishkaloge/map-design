@@ -4,6 +4,8 @@ import { compose, resolveSize, legendRow } from "./layout.mjs";
 import { frame, G } from "./geo.mjs";
 import { basemap } from "./basemap.mjs";
 import { rasterBasemap, resolveBasemap } from "./tiles.mjs";
+import { isStreetBasemap, resolveStreetBasemap, streetBasemap } from "./streets.mjs";
+import { SpecError } from "./errors.mjs";
 import { Placer } from "./labels.mjs";
 import { validate, loadRows } from "./spec.mjs";
 import { annotations } from "./kinds/common.mjs";
@@ -33,7 +35,9 @@ export async function render(spec, { base = process.cwd(), embedFonts = true, ch
   const report = newReport();
   // A raster basemap needs a conformal, axis-aligned projection: XYZ tiles are
   // Web Mercator squares and would shear under anything else. Credit them too.
-  const rasterCfg = resolveBasemap(spec.basemap);
+  // "streets" is the vector basemap: any projection, coloured by the theme.
+  const streetCfg = isStreetBasemap(spec.basemap) ? resolveStreetBasemap(spec.basemap) : null;
+  const rasterCfg = streetCfg ? null : resolveBasemap(spec.basemap);
   if (rasterCfg) {
     const asked = typeof spec.projection === "string" ? spec.projection : spec.projection?.name;
     if (asked !== "mercator") {
@@ -51,7 +55,9 @@ export async function render(spec, { base = process.cwd(), embedFonts = true, ch
   const legend = legends.length > 1 ? legendRow(legends) : legends[0] ?? null;
   const layout = compose({
     width, height, theme, spec, legend,
-    mapAttribution: rasterCfg ? { text: rasterCfg.attribution, urls: rasterCfg.attributionUrls } : null,
+    mapAttribution: rasterCfg
+      ? { text: rasterCfg.attribution, urls: rasterCfg.attributionUrls }
+      : streetCfg ? { text: streetCfg.attribution, urls: ["https://www.openstreetmap.org/copyright", "https://www.openmaptiles.org/"] } : null,
   });
   const [[mx0, my0], [mx1, my1]] = layout.map;
   const pad = spec.region === "world" || spec.region == null ? 0 : Math.round(Math.min(mx1 - mx0, my1 - my0) * 0.03);
@@ -86,7 +92,21 @@ export async function render(spec, { base = process.cwd(), embedFonts = true, ch
   } else if (rasterCfg && !check) {
     report.warnings.push(`basemap: no tiles (${raster?.error ?? "unknown"}) — using the vector geography instead`);
   }
-  const base0 = basemap({ framed, theme, rect, spec, focus: kind.focus ?? [], thematic: kind.thematic, admin1Of: kind.admin1Of, raster: raster?.group ?? "" });
+  let streets = null;
+  if (streetCfg && check) report.notes.push("basemap: streets configuration validated; check skips tile downloads");
+  if (streetCfg && !check) {
+    try {
+      streets = await streetBasemap({ cfg: streetCfg, theme, projection: framed.projection, rect, log });
+      report.notes.push(...streets.notes);
+    } catch (e) {
+      if (e instanceof SpecError) throw e;
+      report.warnings.push(`basemap: vector tiles unavailable (${e.message}) — using the vector geography instead`);
+    }
+  }
+  const base0 = basemap({
+    framed, theme, rect, spec, focus: kind.focus ?? [], thematic: kind.thematic, admin1Of: kind.admin1Of,
+    raster: streets?.group ?? raster?.group ?? "", coast: !streets,
+  });
   const unit = layout.unit;
   const placer = new Placer([mx0 + 2, cy0 + 2, mx1 - 2, cy1 - 2]);
   const env = { ...framed, path: base0.path, theme, unit, placer, rect, resolution: base0.resolution, report, layout };
@@ -114,7 +134,7 @@ export async function render(spec, { base = process.cwd(), embedFonts = true, ch
     `<g class="furniture">${layout.furniture}${legend && layout.legendAt ? legend.svg(layout.legendAt) : ""}</g>`,
     `</svg>`,
   ].join("\n");
-  return { svg: embedFonts ? withFonts(svg) : svg, report, width, height, theme, spec };
+  return { svg: embedFonts ? withFonts(svg) : svg, report, width, height, theme, spec, interactive: { accent: theme.accent, items: streets?.hover ?? [] } };
 }
 
 /** Page shape that suits the region: portrait for tall areas, square for compact ones. */

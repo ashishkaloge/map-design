@@ -1,10 +1,49 @@
-# Raster basemaps
+# Basemaps
 
-Raster tiles add street detail underneath editorial maps. They are optional:
-maps using the bundled vector geography remain offline. Basemaps use Mercator,
-including world and dateline frames, and embed tiles in the SVG and HTML.
+A basemap adds street detail underneath editorial maps. It is optional: maps using
+the bundled vector geography remain offline.
 
-## Options
+## Streets (vector, recommended)
+
+```json
+{ "basemap": "streets" }
+{ "basemap": { "preset": "streets", "maxTiles": 200, "zoom": 13, "opacity": 0.9 } }
+```
+
+Draws roads (fading by class), water, parks, rail and, at the closest zoom,
+building footprints from OpenStreetMap vector tiles in the
+[OpenMapTiles](https://openmaptiles.org/) schema, served free by
+[OpenFreeMap](https://openfreemap.org/). Colours come from the map's theme, so the
+basemap stays quiet under the data. It keeps the map's own projection, stays sharp
+at any export size, and replaces the bundled 1:50m coastline with the real one.
+Named streets, waterways and parks get hover details in the HTML.
+
+- Automatic zoom follows the map's scale and steps down until the tile count
+  fits `maxTiles` (default 144, at most 3,000). An explicit `zoom` (0–14)
+  is preserved; if it exceeds the tile budget, rendering fails before downloading.
+- It is meant for city and regional frames; frames wider than 60° of longitude
+  are rejected.
+- Tiles are cached under `~/.cache/map-design/vector` and reused. A render can work
+  offline when its tiles and TileJSON are cached; source metadata is refreshed
+  after 12 hours, with a stale copy used if the source is unreachable.
+  `MAP_DESIGN_TILEJSON` points at another OpenMapTiles-schema source, such as your
+  own tile server. Verify that the source permits the intended downloads and that
+  its required attribution is covered by the generated footer; extra attribution
+  in a custom TileJSON is not automatically included.
+- [OpenFreeMap's terms](https://openfreemap.org/tos/) allow downloads from apps
+  of at most 3,000 tiles or 50 MB, four requests at a time, with an identifying
+  User-Agent; the renderer enforces all three. Commercial use is allowed. The
+  footer credits © OpenMapTiles.org and © OpenStreetMap contributors with the
+  copyright URLs; keep them visible.
+- If the tile service cannot be reached, the map falls back to the bundled
+  geography and the report says so.
+
+## Raster tiles
+
+Raster presets embed tile images. They use Mercator, including world and dateline
+frames, and embed tiles in the SVG and HTML.
+
+### Options
 
 Use a preset name or an object:
 
@@ -57,12 +96,12 @@ Failed tiles are reported. Non-PNG responses and invalid cache headers are rejec
 rather than embedded as successful images. If every tile fails, the renderer uses
 vector geography. `check` validates options and locations without fetching or writing.
 
-## Provider requirements
+### Provider requirements
 
 Terms can change; check the linked primary sources for your intended use.
 Keep generated credits and copyright links visible, including in exported PNGs.
 
-### OpenStreetMap standard tiles
+#### OpenStreetMap standard tiles
 
 `osm`, `light` and `dark` use `tile.openstreetmap.org`. Its
 [tile usage policy](https://operations.osmfoundation.org/policies/tiles/)
@@ -74,7 +113,7 @@ Embedding a finished map does not establish permission for a bulk/offline
 workflow. See the [attribution guidelines](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines)
 for the map's credits and licence notice.
 
-### OpenStreetMap France
+#### OpenStreetMap France
 
 `osm-hot` is hosted by OpenStreetMap France; it is not governed by the standard
 OSMF tile-service policy above. Its [map guidance](https://www.openstreetmap.fr/fonds-de-carte/)
@@ -85,7 +124,7 @@ traffic, with only limited corporate-site tolerance. Other uses need an appropri
 provider or permission. The footer credits the data contributors, HOT style and
 OpenStreetMap France hosting, with the copyright URL visible and clickable.
 
-### CARTO
+#### CARTO
 
 Use your own key and retain both CARTO and OpenStreetMap attribution. Section 8
 requires a key for all requests; unauthenticated presets are rejected rather than

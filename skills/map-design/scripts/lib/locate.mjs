@@ -1,8 +1,8 @@
 // Turns a location reference from a spec into coordinates, using only bundled
 // data. Every resolution is recorded so the agent can show its work.
-import { geoCentroid } from "../vendor/geo.mjs";
+import { geoCentroid, geoContains } from "../vendor/geo.mjs";
 import {
-  findAirport, findCountry, findPlace, findUsState, suggestCountries, suggestPlaces,
+  features, findAirport, findCountry, findPlace, findUsState, suggestCountries, suggestPlaces,
   usStateFeatures, admin1Features, findAdmin1,
 } from "./data.mjs";
 import { SpecError } from "./errors.mjs";
@@ -135,6 +135,25 @@ export function admin1For(countryRef, name) {
   const c = findCountry(countryRef);
   if (!c) return null;
   return findAdmin1(c.iso3, name) ?? null;
+}
+
+/** ISO3 code of the country at a point (Natural Earth 1:50m). Points on water
+ *  at that scale, such as a city centre on a strait, take the nearest country
+ *  within about 25 km. Returns null in open sea. */
+export function countryAt(lon, lat) {
+  const countries = features("world-50m", "countries").features;
+  const hit = ([x, y]) => countries.find((f) => geoContains(f, [x, y]))?.properties.iso3 ?? null;
+  const here = hit([lon, lat]);
+  if (here) return here;
+  const kmLon = 111.32 * Math.max(0.1, Math.cos((lat * Math.PI) / 180));
+  for (const km of [3, 8, 15, 25]) {
+    for (let a = 0; a < 360; a += 45) {
+      const r = (a * Math.PI) / 180;
+      const found = hit([lon + (km * Math.cos(r)) / kmLon, lat + (km * Math.sin(r)) / 111.32]);
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
 export { admin1Features };
