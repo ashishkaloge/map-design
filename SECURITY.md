@@ -15,7 +15,8 @@ Useful reports include:
   paths it was given;
 - text from a spec or data file that escapes into the SVG or HTML as markup or
   script;
-- the CLI contacting any host other than the configured Overpass endpoint.
+- the CLI contacting any host other than the configured Overpass endpoint or a basemap
+  tile host named by the spec (a preset's host, or the `basemap.url` host).
 
 ## What the tool does
 
@@ -23,6 +24,18 @@ Useful reports include:
 - Writes `<name>.html`, `<name>.svg` and `<name>.png` where you point it.
 - For posters only, sends one query to the public Overpass API (or the endpoint
   you set) and caches the response under `~/.cache/map-design`.
+- For maps whose spec asks for a `basemap`, downloads raster tiles from the
+  preset's tile host (OpenStreetMap or CARTO) or the http(s) URL the spec names,
+  and normally reuses cached tiles for seven days under `~/.cache/map-design/tiles`.
+  CARTO responses are never read from or written to this cache, including when
+  supplied through a custom keyed URL. Its root and documented tile subdomains
+  require a nonempty `key` before any request. Redirects are rejected, and only
+  responses declaring PNG with a PNG signature/header are embedded or cached.
+  Cache hits also undergo PNG format detection. Fetching is bounded:
+  `maxTiles` caps distinct tiles (even with an explicit `zoom`), and each attempt is
+  capped at 10 s and 2 MiB. A tile may have three attempts with backoff; this is not
+  a ten-second bound for the whole render. Spec checks do not fetch tiles or write
+  caches. Request URLs and provider keys are omitted from fetch-error reports.
 - For PNG export, starts your locally installed Chrome, Edge, Brave or
   Chromium in headless mode with a temporary profile.
 - The generated HTML makes no network requests.

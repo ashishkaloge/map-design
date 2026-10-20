@@ -164,7 +164,8 @@ Or copy `skills/map-design/` into your agent's skills folder, for example
 Requirements: Node.js 20 or newer. PNG export uses a Chrome, Edge, Brave or
 Chromium you already have; without one you still get HTML and SVG, and the
 HTML page has a PNG button. City posters need an internet connection to fetch
-OpenStreetMap data.
+OpenStreetMap data. Optional raster basemaps also download tiles; provider terms
+and caching differ. See [basemaps](skills/map-design/references/basemaps.md).
 
 ### Use it without an agent
 
@@ -242,7 +243,8 @@ Overpass API in one query, cache them, and rebuild the sea from OpenStreetMap
 coastlines. Car-free centers such as Venice automatically get footpaths.
 
 The skill is about 9 MB: 8 MB of simplified open data, 0.8 MB of fonts and the
-renderer. Everything except poster downloads works offline.
+renderer. Bundled vector maps and spec checks work offline. Poster downloads and
+requested raster basemap tiles require network access; generated files are self-contained.
 
 ## Limits
 
@@ -254,8 +256,9 @@ renderer. Everything except poster downloads works offline.
   The CLI backs off and retries, and caches every download.
 - **Labels** are placed greedily. On dense maps some are left out; the report
   lists them.
-- **No tiles or imagery.** These are vector maps, not slippy maps. No road
-  routing, terrain shading or your own boundary files yet.
+- **Raster basemaps** are optional static tiles under the data, with Mercator
+  projection and a bounded tile budget. Provider access, attribution and export
+  requirements apply. No road routing, terrain shading or your own boundary files yet.
 - **Statistics in `builtin:countries`** are Natural Earth's 2019 estimates. For
   current figures, give the agent a source to fetch.
 

@@ -22,7 +22,7 @@ export function resolveSize(size, fallback = "landscape") {
  * Compute regions of the page and render the text furniture.
  * Returns { width, height, map: [[x0,y0],[x1,y1]], legendAt: {x, y, maxWidth}, header, footer, unit }.
  */
-export function compose({ width, height, theme, spec, legend }) {
+export function compose({ width, height, theme, spec, legend, mapAttribution = null }) {
   const unit = Math.min(width, height * 1.4) / 1600; // 1 at the 1600px reference width
   const margin = Math.round(Math.max(28, 54 * unit));
   const inner = width - margin * 2;
@@ -77,12 +77,15 @@ export function compose({ width, height, theme, spec, legend }) {
   if (spec.note) footBits.push({ text: spec.note, italic: false });
   const credits = [spec.source && `Source: ${String(spec.source).replace(/^source:\s*/i, "")}`, spec.credit, spec.attribution].filter(Boolean).join("  ·  ");
   if (credits) footBits.push({ text: credits });
-  const footLines = footBits.flatMap((b) => wrap(b.text, inner, footSize, f.body).map((t) => ({ t })));
+  if (mapAttribution?.text) footBits.push({ text: mapAttribution.text });
+  for (const url of mapAttribution?.urls ?? []) footBits.push({ text: url.replace(/^https:\/\//, ""), href: url });
+  const footLines = footBits.flatMap((b) => wrap(b.text, inner, footSize, f.body).map((t) => ({ t, href: b.href })));
   const footerHeight = footLines.length ? footLines.length * footSize * 1.45 + margin * 0.55 : margin * 0.6;
   let fy = height - footerHeight + footSize * 1.1;
   if (footLines.length) fy = height - margin * 0.55 - (footLines.length - 1) * footSize * 1.45;
-  for (const { t } of footLines) {
-    parts.push(`<text x="${margin}" y="${n(fy)}" font-family="${esc(f.body)}" font-size="${footSize}" fill="${theme.faint}">${esc(t)}</text>`);
+  for (const { t, href } of footLines) {
+    const text = `<text x="${margin}" y="${n(fy)}" font-family="${esc(f.body)}" font-size="${footSize}" fill="${theme.faint}">${esc(t)}</text>`;
+    parts.push(href ? `<a href="${esc(href)}">${text}</a>` : text);
     fy += footSize * 1.45;
   }
 

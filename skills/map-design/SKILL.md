@@ -92,6 +92,28 @@ This one runs as is: `builtin:countries` is bundled.
 
 Everything else, per kind: [references/spec.md](references/spec.md).
 
+## Basemaps (street-level detail)
+
+The bundled Natural Earth geography is designed for country-scale maps. For streets
+under the data, add an optional raster basemap:
+
+```json
+{ "kind": "points", "basemap": "dark", "theme": "ink",
+  "region": { "center": [12.55, 55.68], "radiusKm": 6 } }
+```
+
+`osm`, `osm-hot`, `light` and `dark` are keyless; `voyager` and the `carto-*` presets
+require a provider key supplied in a custom URL. Tiles use Mercator and are embedded
+in the output. CARTO URLs must include one nonempty `key` parameter before fetching.
+The default budget is 144 distinct tiles; `maxTiles` applies even
+with an explicit `zoom`. `check` validates configuration without fetching tiles or
+writing caches. Keep the generated attribution and copyright links visible.
+
+Before choosing a provider, read [basemap options and provider terms](references/basemaps.md).
+OSM, OSM France and CARTO have different access, cache and export requirements;
+self-contained output does not grant permission for every use. Use your own tile
+service or a provider permitting your workload for bulk or offline map products.
+
 ## Design rules
 
 - The title states the finding; the subtitle says what is measured, where and when.
