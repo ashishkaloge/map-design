@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { render } from "../skills/map-design/scripts/lib/render.mjs";
+import { POSTER } from "../skills/map-design/scripts/lib/themes.mjs";
+import { luminance } from "../skills/map-design/scripts/lib/color.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const opts = { base: here, embedFonts: false };
@@ -156,7 +158,27 @@ test("a poster renders offline from an Overpass export", async () => {
   assert.doesNotMatch(r.svg, /class="road service"/, "tunnels are skipped");
   assert.match(r.svg, /© OpenStreetMap contributors/);
   // Coastline south of center: sea rectangle plus a land polygon.
-  assert.match(r.svg, /<rect width="1200" height="1600" fill="#D6E0E1"\/>/);
+  assert.ok(r.svg.includes(`<rect width="1200" height="1600" fill="${POSTER.paper.water}"/>`));
+});
+
+test("poster roads fade by class and arteries get a casing", async () => {
+  const r = await render({ kind: "poster", center: [10, 50], radiusKm: 1, osm: "fixtures/mini-osm.json", title: "Testburg", theme: "noir" }, opts);
+  const color = (cls) => r.svg.match(new RegExp(`class="road ${cls}"[^>]*stroke="(#[0-9A-F]{6})"`))[1];
+  assert.ok(luminance(color("motorway")) > luminance(color("residential")) * 1.5, "arteries read brighter than side streets");
+  assert.match(r.svg, new RegExp(`class="casing motorway"[^>]*stroke="${POSTER.noir.bg}"`));
+  assert.doesNotMatch(r.svg, /class="casing residential"/);
+  for (const t of Object.values(POSTER)) assert.match(t.building, /^#[0-9A-F]{6}$/i);
+});
+
+test("poster capitals follow the place's language", async () => {
+  const base = { kind: "poster", radiusKm: 1, osm: "fixtures/mini-osm.json" };
+  const tr = await render({ ...base, center: [28.99, 41.02], title: "İstanbul", subtitle: "Haliç · Boğaziçi" }, opts);
+  assert.match(tr.svg, />HALİÇ · BOĞAZİÇİ</, "Turkish keeps the dotted capital I");
+  const el = await render({ ...base, center: [10, 50], title: "Αθήνα", lang: "el" }, opts);
+  assert.match(el.svg, />ΑΘΗΝΑ</, "Greek capitals drop accents");
+  const plain = await render({ ...base, center: [10, 50], title: "Lindiwe" }, opts);
+  assert.match(plain.svg, />LINDIWE</);
+  await assert.rejects(render({ ...base, center: [10, 50], lang: "not a tag!" }, opts), /lang must be/);
 });
 
 test("fonts are embedded only for faces in use", async () => {

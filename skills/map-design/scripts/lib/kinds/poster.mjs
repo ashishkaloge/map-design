@@ -5,13 +5,14 @@ import { resolve as resolvePath } from "node:path";
 import { posterTheme } from "../themes.mjs";
 import { resolveSize } from "../layout.mjs";
 import { fetchOsm, classify, coastToLand, clipPolyline } from "../osm.mjs";
-import { resolveLocation } from "../locate.mjs";
+import { resolveLocation, countryAt } from "../locate.mjs";
 import { findCountry } from "../data.mjs";
 import { embedFonts } from "../fonts.mjs";
 import { SpecError } from "../errors.mjs";
 import { esc, n, formatCoords, textWidth } from "../svg.mjs";
 
 const ORDER = ["path", "service", "residential", "tertiary", "secondary", "primary", "trunk", "motorway"];
+const CASED = new Set(["secondary", "primary", "trunk", "motorway"]);
 const RAD = Math.PI / 180;
 const mercY = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * RAD) / 2));
 
@@ -24,6 +25,7 @@ export async function renderPoster(spec, { base = process.cwd(), embedFonts: emb
   let center;
   let placeName = spec.title;
   let countryName = spec.subtitle;
+  let countryCode = null;
   if (spec.center != null) {
     if (!Array.isArray(spec.center) || spec.center.length !== 2) throw new SpecError("center must be [longitude, latitude].");
     const loc = resolveLocation(spec.center);
@@ -34,6 +36,7 @@ export async function renderPoster(spec, { base = process.cwd(), embedFonts: emb
     if (loc.warning) report.warnings.push(loc.warning);
     report.resolved.push({ ref: spec.place, as: loc.how, lon: loc.lon, lat: loc.lat });
     center = [loc.lon, loc.lat];
+    countryCode = loc.country ?? null;
     placeName ??= loc.label;
     countryName ??= loc.country ? findCountry(loc.country)?.name : undefined;
   } else throw new SpecError('A poster needs "place" (a city from the gazetteer) or "center": [lon, lat].');
@@ -124,12 +127,15 @@ export async function renderPoster(spec, { base = process.cwd(), embedFonts: emb
     const faint = !carFree && (cls === "service" || cls === "path");
     const d = linePaths(lines);
     if (!d) continue;
+    // A thin background-coloured casing lifts each artery off the streets it crosses.
+    if (CASED.has(cls)) parts.push(`<path class="casing ${cls}" d="${d}" fill="none" stroke="${theme.casing ?? theme.bg}" stroke-width="${n((style.width + 1.1) * scale, 2)}" stroke-linecap="round" stroke-linejoin="round"/>`);
     parts.push(`<path class="road ${cls}" d="${d}" fill="none" stroke="${style.color}" stroke-width="${n(style.width * scale, 2)}" stroke-linecap="round" stroke-linejoin="round"${faint ? ' stroke-opacity="0.7"' : ""}/>`);
   }
 
   // Typography.
-  const title = (spec.title ?? placeName).toUpperCase();
-  const subtitle = spec.subtitle === false ? "" : String(countryName ?? "").toUpperCase();
+  const locale = titleLocale(spec.lang, countryCode ?? countryAt(center[0], center[1]));
+  const title = upper(spec.title ?? placeName, locale);
+  const subtitle = spec.subtitle === false ? "" : upper(String(countryName ?? ""), locale);
   const u = W / 1200;
   const fadeTop = H * (spec.textBand ?? 0.73);
   const titleSize = Math.min(104 * u, (W * 0.8) / Math.max(4, title.length * 0.92));
@@ -220,6 +226,25 @@ function drawPins(markers, { project, W, H, u, theme, report, fadeTop, center })
     out.push(`</g>`);
   }
   return out;
+}
+
+// Languages whose capitals differ from the default Unicode mapping: Turkish and
+// Azerbaijani keep the dot (i -> İ), Greek drops accents in all-caps text.
+const CAPS_LOCALE = { TUR: "tr", AZE: "az", GRC: "el", CYP: "el" };
+
+function titleLocale(lang, iso3) {
+  if (lang != null) {
+    try {
+      return Intl.getCanonicalLocales(String(lang))[0];
+    } catch {
+      throw new SpecError(`lang must be a language tag such as "tr" or "el", got ${JSON.stringify(lang)}.`);
+    }
+  }
+  return CAPS_LOCALE[iso3] ?? undefined;
+}
+
+function upper(text, locale) {
+  return locale ? String(text).toLocaleUpperCase(locale) : String(text).toUpperCase();
 }
 
 function isDark(hex) {

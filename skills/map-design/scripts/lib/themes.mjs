@@ -1,6 +1,8 @@
 // Design tokens. Editorial themes drive data maps; poster themes drive city posters.
 // Every color a renderer uses comes from here, so a theme change restyles the whole map.
 
+import { mix } from "./color.mjs";
+
 const SANS = "'Libre Franklin', 'Helvetica Neue', Arial, sans-serif";
 const SERIF = "'Source Serif 4', Georgia, 'Times New Roman', serif";
 const GARAMOND = "'EB Garamond', Garamond, Georgia, serif";
@@ -184,78 +186,93 @@ export const EDITORIAL = {
   },
 };
 
-const road = (all, scale = {}) => ({
-  motorway: { color: all, width: 2.6 * (scale.major ?? 1) },
-  trunk: { color: all, width: 2.3 * (scale.major ?? 1) },
-  primary: { color: all, width: 1.8 * (scale.major ?? 1) },
-  secondary: { color: all, width: 1.35 },
-  tertiary: { color: all, width: 1.05 },
-  residential: { color: all, width: 0.6 * (scale.minor ?? 1) },
-  service: { color: all, width: 0.35 * (scale.minor ?? 1) },
-  path: { color: all, width: 0.3 * (scale.minor ?? 1) },
-});
+// Roads fade from the road colour toward the background by class, so arteries
+// read first and the residential mesh becomes texture. FADE is how far each
+// class moves toward the background; WIDTH is the stroke at 1200 px wide.
+const FADE = { motorway: 0, trunk: 0.03, primary: 0.08, secondary: 0.18, tertiary: 0.28, residential: 0.4, service: 0.55, path: 0.6 };
+const WIDTH = { motorway: 2.6, trunk: 2.3, primary: 1.8, secondary: 1.35, tertiary: 1.05, residential: 0.6, service: 0.35, path: 0.3 };
+const MAJOR = new Set(["motorway", "trunk", "primary"]);
+const MINOR = new Set(["residential", "service", "path"]);
 
-export const POSTER = {
+function road(color, bg, scale = {}) {
+  const out = {};
+  for (const [cls, w] of Object.entries(WIDTH)) {
+    const k = MAJOR.has(cls) ? scale.major ?? 1 : MINOR.has(cls) ? scale.minor ?? 1 : 1;
+    out[cls] = { color: mix(color, bg, FADE[cls] * (scale.fade ?? 1)), width: w * k };
+  }
+  return out;
+}
+
+// `road` is the strongest street colour; `building` and `park` sit just off the
+// background so blocks gain texture without competing with the streets.
+const POSTER_DEFS = {
   noir: {
     label: "White streets on black.",
     pin: "#FF5A4E",
-    bg: "#0D0D0D", water: "#262A31", park: "#161816", text: "#F4F4F2", muted: "#9A9A96",
-    roads: road("#ECECEA"), rail: "#5C5C5A", font: GEOMETRIC, sub: GEOMETRIC, mono: MONO,
+    bg: "#0D0D0D", water: "#232A33", park: "#16201A", building: "#19191B", text: "#F4F4F2", muted: "#9A9A96",
+    road: "#F2F2F0", rail: "#5C5C5A", font: GEOMETRIC, sub: GEOMETRIC, mono: MONO,
   },
   paper: {
     label: "Charcoal on warm paper. Prints well.",
     pin: "#C2412D",
-    bg: "#F3EEE4", water: "#D6E0E1", park: "#E4E6D8", text: "#1F1D1A", muted: "#6D675E",
-    roads: road("#2A2825"), rail: "#8B857B", font: GEOMETRIC, sub: GEOMETRIC, mono: MONO,
+    bg: "#F3EEE4", water: "#CFDCDE", park: "#DDE3CD", building: "#E5DDCF", text: "#1F1D1A", muted: "#6D675E",
+    road: "#24221F", rail: "#8B857B", font: GEOMETRIC, sub: GEOMETRIC, mono: MONO,
   },
   blueprint: {
     label: "Cyanotype linework.",
     pin: "#FFD166",
-    bg: "#1B3A62", water: "#142C4B", park: "#1F426D", text: "#EEF5FF", muted: "#A9C1E2",
-    roads: road("#DCE8F7"), rail: "#7FA0CC", font: MONO, sub: MONO, mono: MONO,
+    bg: "#1B3A62", water: "#132B4A", park: "#21466F", building: "#20416B", text: "#EEF5FF", muted: "#A9C1E2",
+    road: "#E4EEFA", rail: "#7FA0CC", font: MONO, sub: MONO, mono: MONO,
   },
   sumi: {
     label: "Ink on washi paper with a red seal.",
     pin: "#B7282E",
-    bg: "#F2ECDF", water: "#D9D3C6", park: "#E7E1D2", text: "#1A1A1A", muted: "#6B655B", accent: "#B7282E",
-    roads: road("#1A1A1A", { minor: 0.9 }), rail: "#77716A", font: GARAMOND, sub: GARAMOND, mono: GARAMOND,
+    bg: "#F2ECDF", water: "#D8D2C4", park: "#E3DDCB", building: "#E7E0D1", text: "#1A1A1A", muted: "#6B655B", accent: "#B7282E",
+    road: "#1A1A1A", roadScale: { minor: 0.9 }, rail: "#77716A", font: GARAMOND, sub: GARAMOND, mono: GARAMOND,
   },
   terracotta: {
     label: "Burnt orange streets on sandstone.",
     pin: "#1D5C63",
-    bg: "#EFE2D2", water: "#D8C6B0", park: "#E5D7C2", text: "#6A2C14", muted: "#9A6448",
-    roads: road("#A9472A"), rail: "#C08A6C", font: GEOMETRIC, sub: GEOMETRIC, mono: MONO,
+    bg: "#EFE2D2", water: "#D5C3AC", park: "#E2D5BC", building: "#E7D8C5", text: "#6A2C14", muted: "#9A6448",
+    road: "#A3401F", rail: "#C08A6C", font: GEOMETRIC, sub: GEOMETRIC, mono: MONO,
   },
   azulejo: {
     label: "Cobalt on white, after Portuguese tiles.",
     pin: "#E39B2D",
-    bg: "#F8F7F3", water: "#D9E3F2", park: "#ECEFF4", text: "#1C4A9C", muted: "#5A78B3",
-    roads: road("#1C4A9C"), rail: "#7E97C7", font: SERIF, sub: SERIF, mono: MONO,
+    bg: "#F8F7F3", water: "#D6E1F2", park: "#E4EAF1", building: "#EDEFF3", text: "#1C4A9C", muted: "#5A78B3",
+    road: "#1C4A9C", rail: "#7E97C7", font: SERIF, sub: SERIF, mono: MONO,
   },
   neon: {
     label: "Synthwave night: magenta arteries, violet streets.",
     pin: "#FFE14D",
-    bg: "#110A1E", water: "#1A1036", park: "#160D29", text: "#FFFFFF", muted: "#C7A8FF",
-    roads: {
-      ...road("#7D5CFF"),
-      motorway: { color: "#FF3DA6", width: 2.6 }, trunk: { color: "#FF3DA6", width: 2.3 },
-      primary: { color: "#FF5DB8", width: 1.8 }, secondary: { color: "#29E7FF", width: 1.3 },
+    bg: "#110A1E", water: "#1A1036", park: "#1A1032", building: "#170E29", text: "#FFFFFF", muted: "#C7A8FF",
+    road: "#8B6CFF",
+    roadOverrides: {
+      motorway: "#FF3DA6", trunk: "#FF3DA6", primary: "#FF5DB8", secondary: "#29E7FF",
     },
     rail: "#3F2C73", font: GEOMETRIC, sub: GEOMETRIC, mono: MONO,
   },
   forest: {
     label: "Cream streets on deep green.",
     pin: "#F2A541",
-    bg: "#1F3A2E", water: "#2C4B40", park: "#244236", text: "#ECE6D3", muted: "#B4C2A8",
-    roads: road("#ECE6D3"), rail: "#6D8574", font: SERIF, sub: SERIF, mono: MONO,
+    bg: "#1F3A2E", water: "#2B4A40", park: "#28493A", building: "#234032", text: "#ECE6D3", muted: "#B4C2A8",
+    road: "#F0EAD8", rail: "#6D8574", font: SERIF, sub: SERIF, mono: MONO,
   },
   mono: {
     label: "Pure black on white. Maximum contrast.",
     pin: "#E30613",
-    bg: "#FFFFFF", water: "#E7E7E7", park: "#F2F2F2", text: "#000000", muted: "#555555",
-    roads: road("#000000"), rail: "#888888", font: GEOMETRIC, sub: GEOMETRIC, mono: MONO,
+    bg: "#FFFFFF", water: "#E4E4E4", park: "#EDEDED", building: "#F0F0F0", text: "#000000", muted: "#555555",
+    road: "#000000", rail: "#888888", font: GEOMETRIC, sub: GEOMETRIC, mono: MONO,
   },
 };
+
+export const POSTER = Object.fromEntries(
+  Object.entries(POSTER_DEFS).map(([name, { road: color, roadScale, roadOverrides, ...t }]) => {
+    const roads = road(color, t.bg, roadScale);
+    for (const [cls, c] of Object.entries(roadOverrides ?? {})) roads[cls] = { ...roads[cls], color: c };
+    return [name, { ...t, roads, casing: t.bg }];
+  }),
+);
 
 export function editorialTheme(name = "paper") {
   const t = EDITORIAL[name];

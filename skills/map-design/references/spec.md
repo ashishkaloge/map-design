@@ -219,6 +219,7 @@ The report prints the total great-circle length in km and miles.
 | `radiusKm` | Half the poster width on the ground (0.3–30, default 4). |
 | `theme` | `noir`, `paper`, `blueprint`, `sumi`, `terracotta`, `azulejo`, `neon`, `forest`, `mono`. |
 | `title` / `subtitle` | Override the city and country lines; `"subtitle": false` hides it. |
+| `lang` | Language tag for the capitalised title lines, e.g. `"tr"`. Defaults from the country: Turkish and Azerbaijani keep the dotted İ, Greek drops accents. |
 | `coords` | `false` hides the coordinate line. |
 | `detail` | `low` (major roads), `medium` (default; all streets), `high` (adds service roads and paths). Areas wider than 9 km default to `low`. |
 | `layers` | `{ "water": false, "parks": false, "rail": false }` to hide layers. |
