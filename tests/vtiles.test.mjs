@@ -176,7 +176,7 @@ test("a poster draws buildings, credits OpenMapTiles and indexes hover details",
   assert.ok(r.report.notes.some((n) => /vector tiles at zoom 14/.test(n)));
   assert.ok(r.report.notes.some((n) => /from the configured vector source/.test(n)));
   const names = r.interactive.items.map((i) => `${i.n} | ${i.i}`);
-  assert.ok(names.some((n) => /^Grand Avenue \| Main road · D1 · \d+ m in view$/.test(n)), names.join("\n"));
+  assert.ok(names.some((n) => /^Grand Avenue \| Main road · D1$/.test(n)), names.join("\n"));
   assert.ok(names.some((n) => /^City Museum \| Museum · about 24 m tall$/.test(n)));
   assert.ok(names.some((n) => /^Central Green \| Park · /.test(n)));
   assert.ok(names.some((n) => /^Clear River \| River$/.test(n)));
