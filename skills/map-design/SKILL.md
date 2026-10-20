@@ -94,43 +94,25 @@ Everything else, per kind: [references/spec.md](references/spec.md).
 
 ## Basemaps (street-level detail)
 
-The vector geography is Natural Earth at 1:50m: accurate at country scale, blocky at city scale. When a map
-needs real streets under the data, ask for raster tiles:
+The bundled Natural Earth geography is designed for country-scale maps. For streets
+under the data, add an optional raster basemap:
 
 ```json
 { "kind": "points", "basemap": "dark", "theme": "ink",
   "region": { "center": [12.55, 55.68], "radiusKm": 6 } }
 ```
 
-- Presets: `osm` and `osm-hot` are keyless. The aliases `light` (= `osm`) and `dark` (keyless: OSM tiles inverted
-  with the filter below) resolve to real styles. `voyager` and the CARTO presets (`carto-light`, `carto-dark`,
-  `carto-voyager`) need an API key — without one they answer HTTP 200 with a watermarked tile, so the report warns
-  rather than shipping it silently. An unknown preset name is a spec error, not a silent fallback.
-  Or point at your own server: `{ "url": "https://…/{z}/{x}/{y}.png", "attribution": "…" }` — the URL must carry all
-  three placeholders, and skipping `attribution` earns a warning, because providers require the credit.
-- For a dark basemap on a dark theme without a key, use `"basemap": "dark"` — the OSM tiles with
-  `invert(1) hue-rotate(180deg) brightness(0.9) saturate(0.55)` applied.
-- The projection is forced to `mercator` — tiles are Web Mercator squares and shear under anything else. The
-  report says when that happened.
-- Zoom is chosen automatically: the highest zoom that fits `maxTiles` (default 144) without stretching a tile past
-  1.5× its native 256 px. Override with `"zoom": 15`, or raise the budget (`"maxTiles": 400`) for a one-off city print.
-  `zoom`, `maxZoom` and `maxTiles` must be bounded integers (`maxTiles` ≤ 4096; `zoom` is clamped to the preset's
-  `maxZoom` with a warning), and the budget always wins: an explicit `zoom` that would exceed `maxTiles` is reported
-  and replaced by the highest zoom that fits. `MAP_DESIGN_DEBUG_TILES=1` prints the tile budget and the chosen zoom
-  for every render.
-- `filter` / `opacity` let the imagery sit under data: `{ "preset": "dark", "filter": "saturate(0.6) brightness(0.72)" }`.
-  `opacity` is a number from 0 to 1; `filter` accepts plain CSS filter functions only (no `url()`, no `drop-shadow`) —
-  anything else is a spec error, so nothing unvetted reaches the SVG.
-- Tiles are embedded as data URIs, so HTML and SVG stay self-contained, and cached in
-  `$XDG_CACHE_HOME/map-design/tiles` (`MAP_DESIGN_TILE_CACHE` overrides), so re-renders cost nothing.
-- Tiles that fail are retried with backoff; anything still missing is reported (a gap in the imagery is visible,
-  so it must never be silent). If every tile fails the map keeps the vector geography and the report says why.
-- Provider terms. `osm`/`osm-hot` credit "© OpenStreetMap contributors" (printed in the footer automatically) and
-  follow the OSM tile usage policy (https://operations.osmfoundation.org/policies/tiles/): visible attribution, no
-  bulk downloading — keep `cache` on, and point `url` at your own tile server or a keyed provider for heavy work.
-  The CARTO presets credit "© OpenStreetMap contributors © CARTO" and need a key (https://carto.com/basemaps/).
-  Exports: tiles are embedded as data URIs and the attribution prints in the footer, so HTML, SVG and PNG all carry
-  the required credit. That covers finished maps; no preset permits redistributing the raw tiles themselves.
+`osm`, `osm-hot`, `light` and `dark` are keyless; `voyager` and the `carto-*` presets
+require a provider key supplied in a custom URL. Tiles use Mercator and are embedded
+in the output. CARTO URLs must include one nonempty `key` parameter before fetching.
+The default budget is 144 distinct tiles; `maxTiles` applies even
+with an explicit `zoom`. `check` validates configuration without fetching tiles or
+writing caches. Keep the generated attribution and copyright links visible.
+
+Before choosing a provider, read [basemap options and provider terms](references/basemaps.md).
+OSM, OSM France and CARTO have different access, cache and export requirements;
+self-contained output does not grant permission for every use. Use your own tile
+service or a provider permitting your workload for bulk or offline map products.
 
 ## Design rules
 

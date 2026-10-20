@@ -9,7 +9,7 @@ Real borders, coastlines and coordinates. No API keys. No runtime dependencies.
 </p>
 
 <p align="center">
-  <a href="https://github.com/incline-ltd/map-design/actions/workflows/ci.yml"><img src="https://github.com/incline-ltd/map-design/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/ashishkaloge/map-design/actions/workflows/ci.yml"><img src="https://github.com/ashishkaloge/map-design/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/Node.js-20%2B-339933" alt="Node.js 20+">
   <img src="https://img.shields.io/badge/dependencies-0-1b1b19" alt="No runtime dependencies">
@@ -22,7 +22,7 @@ Real borders, coastlines and coordinates. No API keys. No runtime dependencies.
 
 <p align="center"><sub>Street poster data: <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a> (ODbL).</sub></p>
 
-<p align="center"><code>npx skills add incline-ltd/map-design</code></p>
+<p align="center"><code>npx skills add ashishkaloge/map-design</code></p>
 
 <p align="center">
   <a href="#ask-for-a-map">Ask for a map</a> ·
@@ -148,13 +148,13 @@ Works with any agent that reads [Agent Skills](https://agentskills.io): Claude
 Code, Codex, Cursor, Gemini CLI, GitHub Copilot, OpenCode and others.
 
 ```bash
-npx skills add incline-ltd/map-design
+npx skills add ashishkaloge/map-design
 ```
 
 In Claude Code you can also install it as a plugin:
 
 ```text
-/plugin marketplace add incline-ltd/map-design
+/plugin marketplace add ashishkaloge/map-design
 /plugin install map-design@map-design
 ```
 
@@ -164,12 +164,13 @@ Or copy `skills/map-design/` into your agent's skills folder, for example
 Requirements: Node.js 20 or newer. PNG export uses a Chrome, Edge, Brave or
 Chromium you already have; without one you still get HTML and SVG, and the
 HTML page has a PNG button. City posters need an internet connection to fetch
-OpenStreetMap data.
+OpenStreetMap data. Optional raster basemaps also download tiles; provider terms
+and caching differ. See [basemaps](skills/map-design/references/basemaps.md).
 
 ### Use it without an agent
 
 The CLI is the same one the agent runs. Run these from the repository folder
-(after `git clone https://github.com/incline-ltd/map-design.git && cd map-design`),
+(after `git clone https://github.com/ashishkaloge/map-design.git && cd map-design`),
 or use the full path to `map.mjs` from anywhere. `render` writes its files next
 to the spec; `poster` writes them to the folder you run it in.
 
@@ -242,7 +243,8 @@ Overpass API in one query, cache them, and rebuild the sea from OpenStreetMap
 coastlines. Car-free centers such as Venice automatically get footpaths.
 
 The skill is about 9 MB: 8 MB of simplified open data, 0.8 MB of fonts and the
-renderer. Everything except poster downloads works offline.
+renderer. Bundled vector maps and spec checks work offline. Poster downloads and
+requested raster basemap tiles require network access; generated files are self-contained.
 
 ## Limits
 
@@ -254,8 +256,9 @@ renderer. Everything except poster downloads works offline.
   The CLI backs off and retries, and caches every download.
 - **Labels** are placed greedily. On dense maps some are left out; the report
   lists them.
-- **No tiles or imagery.** These are vector maps, not slippy maps. No road
-  routing, terrain shading or your own boundary files yet.
+- **Raster basemaps** are optional static tiles under the data, with Mercator
+  projection and a bounded tile budget. Provider access, attribution and export
+  requirements apply. No road routing, terrain shading or your own boundary files yet.
 - **Statistics in `builtin:countries`** are Natural Earth's 2019 estimates. For
   current figures, give the agent a source to fetch.
 

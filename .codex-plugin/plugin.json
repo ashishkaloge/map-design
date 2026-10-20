@@ -6,7 +6,7 @@
     "name": "Ashish Kaloge",
     "url": "https://github.com/ashishkaloge"
   },
-  "repository": "https://github.com/incline-ltd/map-design",
+  "repository": "https://github.com/ashishkaloge/map-design",
   "license": "MIT",
   "keywords": ["maps", "cartography", "choropleth", "svg", "openstreetmap", "poster"],
   "skills": "./skills/"

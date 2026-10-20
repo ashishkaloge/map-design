@@ -40,7 +40,6 @@ export async function render(spec, { base = process.cwd(), embedFonts = true, ch
       spec = { ...spec, projection: "mercator" };
       report.warnings.push("basemap: projection is mercator (XYZ tiles are Web Mercator)");
     }
-    spec = { ...spec, source: [spec.source, rasterCfg.attribution].filter(Boolean).join(" · ") };
   }
   const rows = loadRows(spec.data, base);
   const ctx = { spec, base, theme, rows, report };
@@ -50,7 +49,10 @@ export async function render(spec, { base = process.cwd(), embedFonts = true, ch
 
   const legends = [kind.legend, kind.extraLegend].filter(Boolean);
   const legend = legends.length > 1 ? legendRow(legends) : legends[0] ?? null;
-  const layout = compose({ width, height, theme, spec, legend });
+  const layout = compose({
+    width, height, theme, spec, legend,
+    mapAttribution: rasterCfg ? { text: rasterCfg.attribution, urls: rasterCfg.attributionUrls } : null,
+  });
   const [[mx0, my0], [mx1, my1]] = layout.map;
   const pad = spec.region === "world" || spec.region == null ? 0 : Math.round(Math.min(mx1 - mx0, my1 - my0) * 0.03);
   const extent = [[mx0 + pad, my0 + pad], [mx1 - pad, my1 - pad]];
@@ -63,9 +65,13 @@ export async function render(spec, { base = process.cwd(), embedFonts = true, ch
     cy1 = Math.min(my1, b[1][1]);
   }
   const rect = [[mx0, cy0], [mx1, cy1]];
-  const raster = rasterCfg
+  const raster = rasterCfg && !check
     ? await rasterBasemap({ spec, projection: framed.projection, rect, ...(fetchTile ? { fetchTile } : {}) })
     : null;
+  if (rasterCfg && check) {
+    report.warnings.push(...rasterCfg.warnings.map((warning) => `basemap: ${warning}`));
+    report.notes.push("basemap: configuration validated; check skips tile downloads and cache writes");
+  }
   if (raster?.warnings?.length) {
     for (const w of raster.warnings) report.warnings.push(`basemap: ${w}`);
   }
@@ -77,7 +83,7 @@ export async function render(spec, { base = process.cwd(), embedFonts = true, ch
   if (raster?.tiles) {
     const zoomNote = raster.stretch && raster.stretch > 1.5 ? `, tiles upscaled ${raster.stretch.toFixed(1)}x — raise maxTiles for a sharper basemap` : "";
     report.notes.push(`basemap: ${raster.tiles} tile(s) at zoom ${raster.zoom}${zoomNote} (${raster.attribution})`);
-  } else if (rasterCfg) {
+  } else if (rasterCfg && !check) {
     report.warnings.push(`basemap: no tiles (${raster?.error ?? "unknown"}) — using the vector geography instead`);
   }
   const base0 = basemap({ framed, theme, rect, spec, focus: kind.focus ?? [], thematic: kind.thematic, admin1Of: kind.admin1Of, raster: raster?.group ?? "" });
