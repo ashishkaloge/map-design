@@ -73,7 +73,6 @@ export function hoverItem(kind, name, info, shapes) {
 }
 
 const fmt = (v) => (v >= 10 ? Math.round(v).toLocaleString("en-US") : v.toFixed(1));
-export const formatKm = (km) => `${km >= 0.95 ? fmt(km) : (Math.round(km * 1000 / 10) * 10).toString()} ${km >= 0.95 ? "km" : "m"}`;
 export const formatHectares = (ha) => (ha >= 1 ? `${fmt(ha)} ha` : `${Math.round(ha * 10000).toLocaleString("en-US")} m²`);
 
 /** Drop points closer than `tol` to the last kept one; ends are always kept. */
@@ -164,10 +163,12 @@ export function buildHover(layers, { drawn, carFree = false, toScreen, view, tol
     g.lines.push(...lineShapes(s.lines));
     streets.set(s.name, g);
   }
+  // No length: a named street is often several parallel lines in the tiles
+  // (both carriageways, a cycle track, a service road), so summing them would
+  // overstate it. San Francisco's Market Street sums to 16 km against about 5.
   for (const [name, g] of streets) {
-    const km = g.lines.reduce((t, l) => t + lineLength(l), 0) * kmPerPx;
-    if (!km) continue;
-    const info = [CLASS_LABEL[g.cls], [...g.refs].slice(0, 2).join(", ") || null, `${formatKm(km)} in view`, english(g.en)];
+    if (!g.lines.some((l) => lineLength(l) > 0)) continue;
+    const info = [CLASS_LABEL[g.cls], [...g.refs].slice(0, 2).join(", ") || null, english(g.en)];
     add(hoverItem("line", name, info.filter(Boolean).join(" · "), g.lines));
   }
   if (showWater) {

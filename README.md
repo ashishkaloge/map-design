@@ -202,7 +202,7 @@ node skills/map-design/scripts/map.mjs themes
 Every map is one SVG with its fonts embedded, so it looks the same in a
 browser, a slide or a print shop. The HTML adds hover details that outline the
 feature under the cursor (a country and its value, or on posters and street
-basemaps a street's name, class and length, a park's area, or a landmark's estimated
+basemaps a street's name and class, a park's area, or a landmark's estimated
 height where available), zoom and pan, and SVG and PNG download buttons.
 It makes no network requests.
 

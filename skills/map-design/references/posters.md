@@ -96,7 +96,7 @@ pin lands there or outside the frame.
 ## Hover details
 
 The HTML page names what is under the cursor and outlines it in the theme's
-accent colour: a street's name, class, route number and length in view; a river or
+accent colour: a street's name, class and route number; a river or
 canal; a park, garden or cemetery and its area; a landmark building (museum,
 monument, place of worship…) and its estimated height when available. Names come
 from the tiles; unnamed or unsupported features have no named hover target. Green
