@@ -250,3 +250,30 @@ test("locator highlights an area from a file and marks cities inside it", async 
   assert.match(r.svg, />Los Angeles</);
   assert.doesNotMatch(r.svg, />Phoenix</);
 });
+
+test("areas join on the feature's own id, as plotly and us-atlas county files store it", async () => {
+  const base = dir();
+  const features = [
+    { type: "Feature", id: "06037", properties: { NAME: "Los Angeles" }, geometry: { type: "Polygon", coordinates: [square(-118.5, 34)] } },
+    { type: "Feature", id: "06075", properties: { NAME: "San Francisco" }, geometry: { type: "Polygon", coordinates: [square(-122.5, 37.5)] } },
+  ];
+  writeFileSync(join(base, "counties.geojson"), JSON.stringify(fc(features)));
+  const rows = [{ fips: 6037, rate: 5 }, { fips: "06075", rate: 3 }];
+  const r = await render({ kind: "choropleth", boundaries: "counties.geojson", data: rows, value: "rate" }, { base, embedFonts: false });
+  assert.equal(r.report.unmatched.length, 0);
+  assert.match(r.svg, /data-name="Los Angeles" data-value="5"/);
+  assert.ok(r.report.notes.some((n) => /column "fips" to property "@id"/.test(n)));
+  // TopoJSON keeps the id on each geometry; it survives into the features.
+  const topo = {
+    type: "Topology",
+    arcs: [square(-118.5, 34), square(-122.5, 37.5)],
+    objects: { counties: { type: "GeometryCollection", geometries: [
+      { type: "Polygon", id: "06037", arcs: [[0]], properties: { name: "Los Angeles" } },
+      { type: "Polygon", id: "06075", arcs: [[1]], properties: { name: "San Francisco" } },
+    ] } },
+  };
+  writeFileSync(join(base, "counties.topojson"), JSON.stringify(topo));
+  const t = await render({ kind: "choropleth", boundaries: { file: "counties.topojson", id: "@id" }, data: rows, join: "fips", value: "rate" }, { base, embedFonts: false });
+  assert.equal(t.report.unmatched.length, 0);
+  assert.match(t.svg, /data-name="San Francisco" data-value="3"/);
+});
