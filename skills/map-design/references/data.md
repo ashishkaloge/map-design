@@ -52,6 +52,27 @@ Prefer primary sources and keep the URL in `source`:
 Always check the unmatched report. A choropleth that silently drops five
 countries is wrong in a way readers cannot see.
 
+## Your own boundaries
+
+Anything below the bundled levels (districts, counties outside the US,
+municipalities, postal codes, wards, electoral constituencies) needs a
+boundary file passed as `"boundaries"`. Use the file the user has. Otherwise:
+
+- The national statistics or mapping office of the country usually publishes
+  the official boundaries that its statistics are keyed to. Prefer these: the
+  codes in the data will match.
+- geoBoundaries (<https://www.geoboundaries.org>) provides administrative
+  boundaries with source and license metadata; available levels vary by
+  country. Codes are geoBoundaries' own; join on names when the data has no
+  matching code, and check the unmatched list.
+- US: Census Bureau cartographic boundary files (ZCTAs, tracts, places,
+  congressional districts), keyed by GEOID.
+
+Download the file next to the spec, keep it in longitude/latitude, and put its
+publisher and license in `source`. Large national files render, but cutting
+them to the area you need first (`npx mapshaper in.geojson -filter '...' -o out.geojson`)
+keeps renders fast.
+
 ## Checking a name
 
 ```bash

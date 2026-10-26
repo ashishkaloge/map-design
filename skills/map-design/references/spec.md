@@ -1,7 +1,8 @@
 # Spec reference
 
 A spec is one JSON object. `kind` is required; everything else has a default.
-Paths in `data`, `stops` and `flows` are relative to the spec file.
+Paths in `data`, `stops`, `flows`, `boundaries`, `track` and `highlight` are
+relative to the spec file.
 
 ## Fields every kind accepts
 
@@ -59,6 +60,8 @@ Wherever a row or reference needs a place, any of these work:
 
 In data rows, put these fields on the row itself (`place`, `country`, `lon`,
 `lat`, …) or put a reference in one column and name it with `"location"`.
+Rows read from GeoJSON, GPX or KML use their own geometry: a point is the
+location, an area's centroid stands in for it, and lines are left for routes.
 Ambiguous names (Springfield, Portland, San José) resolve to the largest match
 and print a warning listing the others.
 
@@ -80,8 +83,9 @@ and print a warning listing the others.
 
 | Field | Meaning |
 | --- | --- |
-| `data` | Rows (array) or a CSV/JSON path, or `"builtin:countries"`. |
-| `join` | Column with the area key. Auto-detected from common names (`iso3`, `country`, `state`, `fips`, `name`, …). |
+| `data` | Rows (array) or a CSV/JSON path, or `"builtin:countries"`. A GeoJSON, TopoJSON or KML of polygons shades each polygon by its own properties. |
+| `boundaries` | Your own areas: a GeoJSON, TopoJSON or KML path, or `{ "file", "id", "name", "object" }`. `id` is the feature property that matches `join`; `name` labels areas; `object` picks one object of a TopoJSON file. See [your own geometry](#your-own-geometry). |
+| `join` | Column with the area key. Auto-detected from common names (`iso3`, `country`, `state`, `fips`, `name`, …). With `boundaries`, columns are compared with feature properties, preferring distinct matching keys; ambiguous mappings require explicit `join` and `boundaries.id`. |
 | `value` | Numeric column (or category column with `scale.type: "categorical"`). |
 | `geography` | `countries`, `admin1`, `us-states`, `us-counties`. Inferred from `region` and the keys. |
 | `scale.type` | `quantile` (default), `equal`, `jenks`, `threshold` (with `breaks`), `continuous`, `categorical`. |
@@ -104,6 +108,7 @@ Join keys by geography:
 
 Countries too small to draw at world scale (Singapore, Malta, Pacific
 islands) appear as dots in their class color, so their data is not lost.
+The same holds for your own areas that are smaller than the drawing's detail.
 
 ## bubbles and spikes
 
@@ -154,13 +159,16 @@ islands) appear as dots in their class color, so their data is not lost.
 | Field | Meaning |
 | --- | --- |
 | `stops` | Ordered locations (array or file). Each stop may add `label`, `date`, `note`. `"waypoint": true` shapes the line without a marker, e.g. to round a cape. |
-| `routes` | Several routes: `[{ "name": "2024", "stops": [...], "color": "#…" }]`; adds a legend. |
+| `track` | A recorded line: GPX (tracks and routes), KML or GeoJSON LineStrings. Drawn as recorded, not as great circles. The file's waypoints, or `stops` if given, become unnumbered markers; without either, the start and end are marked. |
+| `routes` | Several routes: `[{ "name": "2024", "stops": [...], "color": "#…" }]` or `[{ "track": "day1.gpx" }]`; adds a legend. A track's own name is used when `name` is left out. |
 | `mode` | `flight` (strings resolve as airport codes), `voyage` or `sea` (dashed line; `voyage` defaults to the antique theme), `road`. |
 | `line` | `great-circle` (default), `straight`, or `arc` (a bowed curve). |
 | `numbered` | Numbered stop badges. Default true for a single route of up to 30 stops. |
 | `lineWidth`, `labelSize` | Sizes at the 1600px reference. |
 
-The report prints the total great-circle length in km and miles.
+The report prints the total great-circle length, or the track length, in km
+and miles. A local track (a run, a ride) frames tightly and leaves out country
+outlines; add `"basemap": "streets"` for the streets under it.
 
 ## flows
 
@@ -191,8 +199,8 @@ The report prints the total great-circle length in km and miles.
 
 | Field | Meaning |
 | --- | --- |
-| `highlight` | A country, `{ "admin1": "Bavaria", "country": "DEU" }`, a place, coordinates, or an array of these. |
-| `cities` | `true` or a number: mark the largest cities in the highlighted countries; capitals are squares. |
+| `highlight` | A country, `{ "admin1": "Bavaria", "country": "DEU" }`, a place, coordinates, a GeoJSON, TopoJSON or KML path (`"site.geojson"` or `{ "file", "label" }`), or an array of these. A file's areas are highlighted together; its points are marked. |
+| `cities` | `true` or a number: mark the largest cities in the highlighted countries, or inside a highlighted file's areas; capitals are squares. |
 | `context` | How much surrounding area to show, as a multiple of the highlight's size (default 0.95). |
 | `inset` | `false` hides the inset globe. `insetSize` scales it (default 0.12). |
 | `contextLabels` | `false` hides neighboring country names. |
@@ -227,3 +235,36 @@ The report prints the total great-circle length in km and miles.
 | `markers` | Labeled pins: `[{ "label": "Juhu Beach" }]` marks the center; add `lon`/`lat` (or `place`) to put a pin elsewhere. Optional `color` and `size`. |
 | `size` | Default `poster` (1200×1600, exported at 3× = 3600×4800). |
 | `overpass` | Another Overpass API endpoint URL. |
+
+## Your own geometry
+
+| Format | Extensions | What is read |
+| --- | --- | --- |
+| GeoJSON | `.geojson`, `.json` | Features, a single Feature or a bare geometry. Properties become columns. |
+| TopoJSON | `.topojson`, `.json` | The object with the most geometries, or the one named by `object`. |
+| GPX | `.gpx` | Waypoints (points with `name`, `desc`, `ele`, `time`), routes and tracks (lines; elevation kept as a third coordinate). |
+| KML | `.kml` | Every Placemark in any folder: Point, LineString, LinearRing, Polygon with holes, MultiGeometry, `gx:Track`. `name`, `description` (tags removed) and ExtendedData become properties. Styles are ignored. |
+
+- Automatic boundary joins require unique nonempty keys. If several fields
+  produce different equally good mappings, set `join` and `boundaries.id`.
+  For repeated IDs representing parts of the same area, name `boundaries.id`
+  explicitly; the parts are grouped under that ID.
+- Coordinates must be longitude/latitude (WGS 84). Values outside ±90° latitude
+  or ±360° longitude mean a projected file; the CLI stops with a conversion
+  command for mapshaper or ogr2ogr. A declared projected or unsupported `crs`
+  is rejected for geometry even when its numbers fit inside those ranges;
+  coordinates are never reprojected automatically.
+- Shapefiles, GeoPackages and KMZ are not read directly; the error says how to
+  convert or unzip them.
+- Rings may wind either way and may be left open. Edges longer than a degree
+  get intermediate points so they follow the parallel, as GIS tools draw them.
+- Explicit boundaries, highlights and tracks reject invalid coordinates and
+  malformed geometry. Missing geometry is counted in the report. When a file
+  is loaded as a table, its properties remain usable and invalid geometry is
+  ignored with a note; other columns can still locate the row.
+- Lines and areas are thinned to a quarter pixel when drawn, so a 100,000-point
+  track or a detailed boundary file stays a small SVG. Files with more than
+  400,000 vertices get a note suggesting `mapshaper -simplify` for speed.
+- Areas or tracks smaller than about 280 km across frame tightly and leave out
+  the Natural Earth land, borders and coastline, which are too coarse to line up.
+  `"basemap": "streets"` draws OpenStreetMap streets and water instead.

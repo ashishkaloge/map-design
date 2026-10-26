@@ -181,7 +181,8 @@ export function frame(spec, extent, dataObject) {
     choice = { name: r.proj, rotate: r.rotate };
   } else if (region === "auto") {
     if (!dataObject) throw new SpecError('region "auto" needs data with locations.');
-    fit = padObject(dataObject, spec.padding ?? 0.12);
+    // Lines and areas frame to their own extent; scattered points get a minimum frame.
+    fit = spec._tight ? padObject(dataObject, spec.padding ?? 0.08, 0, 0) : padObject(dataObject, spec.padding ?? 0.12);
     choice = autoProjection(fit);
   } else if (Array.isArray(region) && region.length === 4 && region.every((v) => typeof v === "number")) {
     fit = bboxCorners(region);
@@ -232,13 +233,12 @@ function worldGrid(centerLon, south = -56, north = 84) {
   return { type: "MultiPoint", coordinates: pts };
 }
 
-function padObject(obj, pad) {
+function padObject(obj, pad, minSpan = 1.2, minPad = 0.15) {
   const [[w, s], [e, n]] = G.geoBounds(obj);
   let span = e - w;
   if (span < 0) span += 360;
-  const minSpan = 1.2;
-  const dx = Math.max(span * pad, (minSpan - span) / 2, 0.15);
-  const dy = Math.max((n - s) * pad, (minSpan - (n - s)) / 2, 0.15);
+  const dx = Math.max(span * pad, (minSpan - span) / 2, minPad, 1e-4);
+  const dy = Math.max((n - s) * pad, (minSpan - (n - s)) / 2, minPad, 1e-4);
   return bboxCorners([w - dx, Math.max(-89, s - dy), e + dx, Math.min(89, n + dy)]);
 }
 

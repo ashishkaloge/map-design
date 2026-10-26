@@ -1,7 +1,8 @@
 // PNG export through a locally installed Chrome, Chromium, Edge or Brave in
-// headless mode. No browser is downloaded; without one, export is skipped.
-import { existsSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+// headless mode, or a Chromium that Playwright already installed. No browser is
+// downloaded; without one, export is skipped.
+import { existsSync, writeFileSync, mkdtempSync, rmSync, readdirSync } from "node:fs";
+import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
@@ -21,6 +22,59 @@ const CANDIDATES = {
   ],
 };
 
+// Executables inside Playwright's browser folders, newest layout first. The
+// headless shell comes before full Chromium: it starts reliably in containers.
+const PLAYWRIGHT = {
+  linux: {
+    shell: ["chrome-headless-shell-linux64/chrome-headless-shell", "chrome-linux/headless_shell"],
+    chromium: ["chrome-linux64/chrome", "chrome-linux/chrome"],
+  },
+  darwin: {
+    shell: ["chrome-headless-shell-mac-arm64/chrome-headless-shell", "chrome-headless-shell-mac-x64/chrome-headless-shell", "chrome-mac/headless_shell"],
+    chromium: [
+      "chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+      "chrome-mac-x64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+      "chrome-mac/Chromium.app/Contents/MacOS/Chromium",
+    ],
+  },
+  win32: {
+    shell: ["chrome-headless-shell-win64\\chrome-headless-shell.exe", "chrome-win\\headless_shell.exe"],
+    chromium: ["chrome-win64\\chrome.exe", "chrome-win\\chrome.exe"],
+  },
+};
+
+function playwrightRoots() {
+  const roots = [process.env.PLAYWRIGHT_BROWSERS_PATH];
+  if (process.platform === "linux") roots.push(join(homedir(), ".cache", "ms-playwright"));
+  if (process.platform === "darwin") roots.push(join(homedir(), "Library", "Caches", "ms-playwright"));
+  if (process.platform === "win32" && process.env.LOCALAPPDATA) roots.push(join(process.env.LOCALAPPDATA, "ms-playwright"));
+  return roots.filter((r) => r && r !== "0" && existsSync(r));
+}
+
+export function playwrightBrowser() {
+  const layout = PLAYWRIGHT[process.platform];
+  if (!layout) return null;
+  for (const root of playwrightRoots()) {
+    let dirs;
+    try {
+      dirs = readdirSync(root);
+    } catch {
+      continue;
+    }
+    const revision = (d) => Number(d.match(/-(\d+)$/)?.[1] ?? 0);
+    for (const [prefix, files] of [["chromium_headless_shell-", layout.shell], ["chromium-", layout.chromium]]) {
+      const found = dirs.filter((d) => d.startsWith(prefix)).sort((a, b) => revision(b) - revision(a));
+      for (const d of found) {
+        for (const f of files) {
+          const exe = join(root, d, f);
+          if (existsSync(exe)) return exe;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 export function findBrowser() {
   if (process.env.MAP_DESIGN_BROWSER && existsSync(process.env.MAP_DESIGN_BROWSER)) return process.env.MAP_DESIGN_BROWSER;
   for (const c of CANDIDATES[process.platform] ?? []) {
@@ -31,7 +85,7 @@ export function findBrowser() {
       if (r.status === 0 && r.stdout.trim()) return r.stdout.trim();
     }
   }
-  return null;
+  return playwrightBrowser();
 }
 
 /** Rasterize an SVG string to `out` at `scale`× its pixel size. Returns { ok, reason }. */
@@ -45,6 +99,8 @@ export function exportPng(svg, width, height, out, { scale = 2 } = {}) {
     const args = [
       "--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run", "--no-default-browser-check",
       "--disable-extensions", "--mute-audio", `--user-data-dir=${join(dir, "profile")}`,
+      // Chrome refuses to start as root (containers, CI) unless its sandbox is off.
+      ...(process.getuid?.() === 0 ? ["--no-sandbox"] : []),
       `--force-device-scale-factor=${scale}`, `--window-size=${width},${height}`,
       "--virtual-time-budget=4000", `--screenshot=${out}`, pathToFileURL(page).href,
     ];
