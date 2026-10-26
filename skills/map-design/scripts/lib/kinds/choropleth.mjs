@@ -348,9 +348,15 @@ export function joinKey(v) {
  * unique keys and keeping the pair that matches the most rows. Equally good
  * pairs must identify the same features; otherwise the user must choose.
  */
+// Many files keep the code on the feature itself rather than in its properties
+// ({ "id": "06037", "properties": { "NAME": "Los Angeles" } }), as plotly's and
+// us-atlas's county files do. "@id" stands for that id beside the properties.
+const FEATURE_ID = "@id";
+const propOf = (f, p) => (p === FEATURE_ID ? f.id : f.properties[p]);
+
 function joinRows(ctx, polys, cfg) {
   const { spec, rows, report } = ctx;
-  const propKeys = [...new Set(polys.flatMap((f) => Object.keys(f.properties)))];
+  const propKeys = [...new Set(polys.flatMap((f) => Object.keys(f.properties))), ...(polys.some((f) => f.id != null) ? [FEATURE_ID] : [])];
   const columns = [...new Set(rows.flatMap((r) => Object.keys(r)))];
   const column = spec.join ?? spec.key ?? null;
   if (column && !rows.some((r) => r[column] != null)) throw new SpecError(`No "${column}" column in the data. Columns: ${columns.join(", ")}.`);
@@ -360,7 +366,7 @@ function joinRows(ctx, polys, cfg) {
     if (!index.has(p)) {
       const m = new Map();
       for (const f of polys) {
-        const k = joinKey(f.properties[p]);
+        const k = joinKey(propOf(f, p));
         if (!k) continue;
         if (!m.has(k)) m.set(k, []);
         m.get(k).push(f);
@@ -373,7 +379,7 @@ function joinRows(ctx, polys, cfg) {
   // A repeated property may describe several distinct areas. Only an explicit
   // boundaries.id authorizes treating those features as one multipart area.
   const properties = cfg.id ? [cfg.id] : propKeys.filter((p) =>
-    polys.some((f) => typeof f.properties[p] === "string" || typeof f.properties[p] === "number")
+    polys.some((f) => typeof propOf(f, p) === "string" || typeof propOf(f, p) === "number")
     && [...indexFor(p).values()].every((parts) => parts.length === 1));
   const keysFor = new Map();
   let bestHits = 0;
@@ -417,7 +423,7 @@ function joinRows(ctx, polys, cfg) {
   const m = indexFor(best.p);
   const used = new Map();
   const entries = [];
-  const known = [...new Set(polys.map((f) => String(f.properties[best.p] ?? "")).filter(Boolean))];
+  const known = [...new Set(polys.map((f) => String(propOf(f, best.p) ?? "")).filter(Boolean))];
   let misses = 0;
   for (const [i, row] of rows.entries()) {
     const k = joinKey(row[best.c]);

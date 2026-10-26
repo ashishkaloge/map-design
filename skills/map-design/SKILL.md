@@ -109,7 +109,8 @@ Pass the user's file; never redraw or retype its coordinates.
   matching a data column to a feature property; codes ignore case and leading
   zeros (`06037` = `6037`). Leave `join` out and the CLI tries every column and
   property pair and reports which matched. Ambiguous matches need explicit keys:
-  `"join": "<data column>"`, `"boundaries": { "file", "id": "<property>", "name": "<property>" }`.
+  `"join": "<data column>"`, `"boundaries": { "file", "id": "<property>", "name": "<property>" }`;
+  `"id": "@id"` means the feature's own top-level id.
   Areas without a row remain in the frame and draw in the no-data color; rows
   without an area are listed.
 - **One file with values:** `"data": "districts.geojson"` with no `boundaries`

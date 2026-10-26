@@ -84,7 +84,7 @@ and print a warning listing the others.
 | Field | Meaning |
 | --- | --- |
 | `data` | Rows (array) or a CSV/JSON path, or `"builtin:countries"`. A GeoJSON, TopoJSON or KML of polygons shades each polygon by its own properties. |
-| `boundaries` | Your own areas: a GeoJSON, TopoJSON or KML path, or `{ "file", "id", "name", "object" }`. `id` is the feature property that matches `join`; `name` labels areas; `object` picks one object of a TopoJSON file. See [your own geometry](#your-own-geometry). |
+| `boundaries` | Your own areas: a GeoJSON, TopoJSON or KML path, or `{ "file", "id", "name", "object" }`. `id` is the feature property that matches `join`, or `"@id"` for the feature's own top-level `id` (where plotly and us-atlas county files keep FIPS codes; tried automatically); `name` labels areas; `object` picks one object of a TopoJSON file. See [your own geometry](#your-own-geometry). |
 | `join` | Column with the area key. Auto-detected from common names (`iso3`, `country`, `state`, `fips`, `name`, …). With `boundaries`, columns are compared with feature properties, preferring distinct matching keys; ambiguous mappings require explicit `join` and `boundaries.id`. |
 | `value` | Numeric column (or category column with `scale.type: "categorical"`). |
 | `geography` | `countries`, `admin1`, `us-states`, `us-counties`. Inferred from `region` and the keys. |
