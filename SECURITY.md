@@ -22,7 +22,9 @@ Useful reports include:
 
 ## What the tool does
 
-- Reads the spec and the data files it names, and the bundled data.
+- Reads the spec and the data files it names (CSV, JSON, GeoJSON, TopoJSON,
+  GPX, KML), and the bundled data. XML entity declarations in GPX and KML are
+  never expanded.
 - Writes `<name>.html`, `<name>.svg` and `<name>.png` where you point it.
 - For posters and the `streets` basemap, downloads OpenStreetMap vector tiles
   from OpenFreeMap (`tiles.openfreemap.org`), or from the source named by the
@@ -45,5 +47,8 @@ Useful reports include:
   a ten-second bound for the whole render. Spec checks do not fetch tiles or write
   caches. Request URLs and provider keys are omitted from fetch-error reports.
 - For PNG export, starts your locally installed Chrome, Edge, Brave or
-  Chromium in headless mode with a temporary profile.
+  Chromium, or a Chromium that Playwright installed, in headless mode with a
+  temporary profile. Run as root (containers, CI), Chrome refuses to start
+  with its sandbox on, so it is started with `--no-sandbox`; the page it loads
+  is the generated SVG, with fonts and any basemap tiles already embedded.
 - The generated HTML makes no network requests.

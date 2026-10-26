@@ -1,6 +1,6 @@
 ---
 name: map-design
-description: Make real, accurate maps as one self-contained HTML, SVG and PNG. Choropleths by country, state, province or US county; bubble, spike and point maps; routes and voyages; flow maps; locator maps with an inset globe; and OpenStreetMap city posters. Use whenever the user asks for a map, a "where is" graphic, data by country/state/county/region, a trip, flight or shipping route, a city poster, or any geographic visualization. Ships Natural Earth, US Census and OurAirports data, so coastlines, borders and coordinates are real rather than drawn from memory.
+description: Make real, accurate maps as one self-contained HTML, SVG and PNG. Choropleths by country, state, province or US county, or by any boundaries in the user's own GeoJSON, TopoJSON or KML (districts, ZIP codes, wards, constituencies, sales territories); bubble, spike and point maps; routes, voyages and GPS tracks from GPX; flow maps; locator maps with an inset globe; and OpenStreetMap city posters. Use whenever the user asks for a map, a "where is" graphic, data by country/state/county/region/district, a trip, flight, run or ride, a city poster, or any geographic visualization. Ships Natural Earth, US Census and OurAirports data, so coastlines, borders and coordinates are real rather than drawn from memory.
 license: MIT
 metadata:
   version: "0.1"
@@ -24,10 +24,12 @@ one exists; HTML and SVG always work.
 
 1. **Pick the kind** from the table below. If the request is ambiguous, choose
    the closest kind and state the choice; ask only when the data is missing.
-2. **Get the data.** Use the user's file as is (CSV or JSON, path relative to
-   the spec). For public statistics, fetch from a primary source and record it
-   in `source`. Never invent values. If you must show placeholder numbers,
-   say so in `subtitle` or `note`.
+2. **Get the data.** Use the user's file as is (CSV, JSON, GeoJSON, TopoJSON,
+   GPX or KML; path relative to the spec). For public statistics, fetch from a
+   primary source and record it in `source`. Never invent values. If you must
+   show placeholder numbers, say so in `subtitle` or `note`. Areas the skill
+   does not bundle (districts, ZIP codes, wards) need a boundary file: see
+   [Your own geometry](#your-own-geometry).
 3. **Write the spec** as `<name>.json` where the outputs should go. Start from
    the matching example in [references/spec.md](references/spec.md).
 4. **Run** `node <skill-dir>/scripts/map.mjs render <name>.json`.
@@ -46,10 +48,12 @@ one exists; HTML and SVG always work.
 | The user has or wants | kind | Notes |
 | --- | --- | --- |
 | A rate or share per country, state, province or county | `choropleth` | Rates, not raw counts. |
+| A rate per district, ZIP code, ward or territory | `choropleth` + `boundaries` | The user's GeoJSON, TopoJSON or KML. |
 | Counts or totals at places | `bubbles` | Circle area ∝ value. |
 | Many values at points, dense areas | `spikes` | Height ∝ value; good for population. |
 | Locations, optionally by category | `points` | Stores, offices, sightings. |
 | An ordered trip, voyage or itinerary | `route` | `mode: "flight"` uses airport codes. |
+| A recorded run, ride, hike or drive | `route` + `track` | GPX, KML or GeoJSON line, drawn as recorded. |
 | Movement between places with volume | `flows` | Migration, trade, flights. |
 | "Where is X?" | `locator` | Highlight a country, region or place, with an inset globe. |
 | A city or neighborhood as art | `poster` | Streets from OpenStreetMap; needs network. |
@@ -91,6 +95,47 @@ This one runs as is: `builtin:countries` is bundled.
 - `annotations`: `[{ "at": "Lagos", "text": "Africa's largest city\n15.4 million", "dx": 60, "dy": -40 }]`.
 
 Everything else, per kind: [references/spec.md](references/spec.md).
+
+## Your own geometry
+
+Pass the user's file; never redraw or retype its coordinates.
+
+```json
+{ "kind": "choropleth", "boundaries": "wards.geojson", "data": "turnout.csv",
+  "join": "ward_code", "value": "turnout", "format": { "suffix": "%" } }
+```
+
+- **Areas:** `"boundaries"` takes GeoJSON, TopoJSON or KML. Rows join to areas by
+  matching a data column to a feature property; codes ignore case and leading
+  zeros (`06037` = `6037`). Leave `join` out and the CLI tries every column and
+  property pair and reports which matched. Ambiguous matches need explicit keys:
+  `"join": "<data column>"`, `"boundaries": { "file", "id": "<property>", "name": "<property>" }`.
+  Areas without a row remain in the frame and draw in the no-data color; rows
+  without an area are listed.
+- **One file with values:** `"data": "districts.geojson"` with no `boundaries`
+  shades each polygon by its own property. Set `value`: the CLI will not guess
+  between numeric columns, and never picks ids or shape sizes.
+- **Points:** `data` may be GeoJSON, GPX waypoints or KML placemarks; each
+  feature's point (or an area's centroid) is its location.
+- **Tracks:** `{ "kind": "route", "track": "ride.gpx" }` draws a GPS track as
+  recorded, marks its waypoints, and reports its length. `routes: [{ "track" }]`
+  compares several.
+- **Locator:** `"highlight": "site.geojson"` (or `{ "file", "label" }`) highlights
+  the file's areas and marks gazetteer cities inside them.
+
+Maps of a small area (a city's wards, a run) frame tightly and leave out the
+1:50m country outlines, which would not line up; add `"basemap": "streets"` for
+streets and water underneath. Detail is thinned to what the page can show, so
+big files draw small. Coordinates must be longitude/latitude (WGS 84); a file
+in a projected system (UTM, British National Grid, Web Mercator metres) stops
+with a conversion command. Shapefiles and KMZ need converting or unzipping
+first, and the error says how. Polygon winding order does not matter.
+
+No file? For districts and other second-level areas, look for the national
+statistics or mapping office's boundaries, or geoBoundaries
+(<https://www.geoboundaries.org>, open licenses per country). Download the
+GeoJSON next to the spec and credit it in `source`. Details:
+[references/data.md](references/data.md#your-own-boundaries).
 
 ## Basemaps (street-level detail)
 
@@ -167,7 +212,12 @@ Details: [references/posters.md](references/posters.md).
 - `matched no countries feature`: use ISO alpha-3 codes in the join column.
 - A point "falls outside this projection": Albers USA only covers the 50 states
   and DC; use `"region": "auto"` or a bbox.
-- No PNG: no supported browser was found. Set `MAP_DESIGN_BROWSER` to a Chrome
-  or Edge binary, or use the HTML's PNG button.
+- No PNG: no supported browser was found. The CLI looks for Chrome, Edge,
+  Brave, Chromium and Playwright's Chromium. Set `MAP_DESIGN_BROWSER` to a
+  browser binary, or use the HTML's PNG button.
+- `not longitude/latitude; the file is in a projected coordinate system`: run
+  the conversion command from the message, then point the spec at the new file.
+- `No data rows match any area`: compare the listed columns and properties,
+  then set `join` and `boundaries.id`.
 - Overpass errors for posters: wait a minute and retry, reduce `radiusKm`, or
   set `"overpass"` to another endpoint.

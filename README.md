@@ -44,6 +44,8 @@ Once installed, ask your agent the way you would ask a designer:
 - *"Plot my trip: London, Dubai, Singapore, Sydney, Auckland, LA, New York, back to London."*
 - *"Bubble map of our stores by revenue. The data is in stores.csv."*
 - *"Poster of the streets around Juhu Beach with a pin where we met."*
+- *"Shade turnout by ward. Boundaries are in wards.geojson, results in turnout.csv."*
+- *"Map my Sunday ride from ride.gpx."*
 
 The agent writes a short JSON spec, runs one command, looks at the PNG, fixes
 what it sees, and hands you the files. Every place it resolved and every row it
@@ -78,6 +80,11 @@ Things a model gets wrong from memory and this skill gets right:
   maps unless the data goes there. No Mercator world maps.
 - **Honest encodings.** Raw counts on a choropleth trigger a warning. Diverging
   palettes need a meaningful midpoint. Every map carries its source.
+- **Your own files.** GeoJSON wound the "wrong" way, open rings, codes that lost
+  their leading zeros, a TopoJSON with several objects, a shapefile exported in
+  UTM metres, a GPS track logged every metre. Supported geometry is checked
+  before drawing; unsupported formats and coordinate systems get conversion
+  guidance.
 
 ## Gallery
 
@@ -162,8 +169,9 @@ Or copy `skills/map-design/` into your agent's skills folder, for example
 `~/.claude/skills/map-design`.
 
 Requirements: Node.js 20 or newer. PNG export uses a Chrome, Edge, Brave or
-Chromium you already have; without one you still get HTML and SVG, and the
-HTML page has a PNG button. City posters and the `streets` basemap need an
+Chromium you already have, including one installed by Playwright; without one
+you still get HTML and SVG, and the HTML page has a PNG button. City posters
+and the `streets` basemap need an
 internet connection to fetch OpenStreetMap data as vector tiles. Optional raster
 basemaps also download tiles; provider terms and caching differ. See
 [basemaps](skills/map-design/references/basemaps.md).
@@ -187,13 +195,13 @@ node skills/map-design/scripts/map.mjs themes
 
 | Kind | For | Example spec |
 | --- | --- | --- |
-| `choropleth` | Rates by country, by state or province (251 countries and territories), by US state or US county | [US population change](examples/us-population-change/spec.json) |
+| `choropleth` | Rates by country, by state or province (251 countries and territories), by US state or US county, or by any areas in your own GeoJSON, TopoJSON or KML: districts, ZIP codes, wards | [US population change](examples/us-population-change/spec.json) |
 | `bubbles` | Totals at places, circle area ∝ value | [Largest cities](examples/largest-cities/spec.json) |
 | `spikes` | Many values at points, height ∝ value | [US urban areas](examples/us-cities/spec.json) |
 | `points` | Locations, colored by category | [spec reference](skills/map-design/references/spec.md#points) |
-| `route` | Trips, voyages, itineraries, flights by airport code | [HMS Beagle](examples/beagle-voyage/spec.json) |
+| `route` | Trips, voyages, itineraries, flights by airport code, and GPS tracks from GPX, KML or GeoJSON | [HMS Beagle](examples/beagle-voyage/spec.json) |
 | `flows` | Movement with volume: migration, trade, traffic | [spec reference](skills/map-design/references/spec.md#flows) |
-| `locator` | "Where is it?" with context and an inset globe | [Bhutan](examples/where-is-bhutan/spec.json) |
+| `locator` | "Where is it?" with context and an inset globe, for a country, region, place or an area from your own file | [Bhutan](examples/where-is-bhutan/spec.json) |
 | `poster` | Any city's streets as print art, from OpenStreetMap, with optional labeled pins | [Lisbon](examples/lisbon/spec.json) |
 
 **Themes for data maps:** `paper` (default), `atlas`, `ink`, `antique`, `swiss`, `blueprint`.
@@ -229,8 +237,9 @@ Design guidance the agent follows: [cartography.md](skills/map-design/references
 
 1. **Resolve.** Every location in the spec is looked up in bundled data:
    7,342 cities and towns, 3,244 airports, 242 countries, first-level regions
-   for 251 countries and territories, and every US state and county. Ambiguities and misses go
-   into the report.
+   for 251 countries and territories, and every US state and county. Your own
+   GeoJSON, TopoJSON, GPX and KML files supply their own geometry. Ambiguities and
+   misses go into the report.
 2. **Join and classify.** Rows join to boundaries by code or name. Values are
    classed by quantiles, natural breaks, thresholds or a continuous ramp, with
    perceptually even palettes.
@@ -269,8 +278,10 @@ requested basemap tiles require network access; generated files are self-contain
   lists them.
 - **Basemaps** are optional: `streets` draws vector streets in any projection,
   and raster presets embed static Mercator tiles. Provider access, attribution and
-  export requirements apply. No road routing, terrain shading or your own boundary
-  files yet.
+  export requirements apply. No road routing or terrain shading yet.
+- **Your own files** must be in longitude/latitude. Shapefiles, GeoPackages and
+  projected files need converting first (the error prints the command); KMZ
+  needs unzipping. No boundaries are downloaded for you.
 - **Statistics in `builtin:countries`** are Natural Earth's 2019 estimates. For
   current figures, give the agent a source to fetch.
 

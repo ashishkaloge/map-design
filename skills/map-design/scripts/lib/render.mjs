@@ -45,11 +45,11 @@ export async function render(spec, { base = process.cwd(), embedFonts = true, ch
       report.warnings.push("basemap: projection is mercator (XYZ tiles are Web Mercator)");
     }
   }
-  const rows = loadRows(spec.data, base);
+  const rows = loadRows(spec.data, base, "data", report);
   const ctx = { spec, base, theme, rows, report };
   const kind = KIND_MODULES[spec.kind].prepare(ctx);
   const region = spec.region ?? kind.defaultRegion ?? "world";
-  const [width, height] = resolveSize(spec.size ?? autoSize({ ...spec, region, _latRange: kind.latRange }, kind.dataObject));
+  const [width, height] = resolveSize(spec.size ?? autoSize({ ...spec, region, _latRange: kind.latRange, _tight: kind.tight }, kind.dataObject));
 
   const legends = [kind.legend, kind.extraLegend].filter(Boolean);
   const legend = legends.length > 1 ? legendRow(legends) : legends[0] ?? null;
@@ -62,7 +62,7 @@ export async function render(spec, { base = process.cwd(), embedFonts = true, ch
   const [[mx0, my0], [mx1, my1]] = layout.map;
   const pad = spec.region === "world" || spec.region == null ? 0 : Math.round(Math.min(mx1 - mx0, my1 - my0) * 0.03);
   const extent = [[mx0 + pad, my0 + pad], [mx1 - pad, my1 - pad]];
-  const framed = frame({ ...spec, region, _latRange: kind.latRange }, extent, kind.dataObject);
+  const framed = frame({ ...spec, region, _latRange: kind.latRange, _tight: kind.tight }, extent, kind.dataObject);
   // A cropped world map is clipped to the crop, not to the whole map area.
   let [cy0, cy1] = [my0, my1];
   if (framed.cropped) {
@@ -105,7 +105,7 @@ export async function render(spec, { base = process.cwd(), embedFonts = true, ch
   }
   const base0 = basemap({
     framed, theme, rect, spec, focus: kind.focus ?? [], thematic: kind.thematic, admin1Of: kind.admin1Of,
-    raster: streets?.group ?? raster?.group ?? "", coast: !streets,
+    raster: streets?.group ?? raster?.group ?? "", coast: !streets, context: kind.context !== false, quiet: kind.quiet,
   });
   const unit = layout.unit;
   const placer = new Placer([mx0 + 2, cy0 + 2, mx1 - 2, cy1 - 2]);

@@ -4,6 +4,7 @@ import { resolve, dirname, extname } from "node:path";
 import { SpecError } from "./errors.mjs";
 import { countryList, features } from "./data.mjs";
 import { G } from "./geo.mjs";
+import { readGeoFile, parseGeo, rowsFromCollection, isGeoPath } from "./geofile.mjs";
 
 export const KINDS = ["choropleth", "bubbles", "spikes", "points", "route", "flows", "locator", "poster"];
 
@@ -108,28 +109,44 @@ function builtinCountries() {
   });
 }
 
-/** Load spec.data (or another rows field) into an array of row objects. */
-export function loadRows(value, base, field = "data") {
+/**
+ * Load spec.data (or another rows field) into an array of row objects. Rows
+ * from GeoJSON, TopoJSON, GPX or KML keep their geometry under GEOMETRY.
+ * Notes about the file (objects chosen, features dropped) go into `report`.
+ * Explicit tracks use strictGeometry so invalid segments cannot be omitted.
+ */
+export function loadRows(value, base, field = "data", report, { strictGeometry = false } = {}) {
   if (value == null) return [];
   if (Array.isArray(value)) return value;
   if (typeof value === "string") {
     if (value === "builtin:countries") return builtinCountries();
+    const ext = extname(value).toLowerCase();
+    const geo = (text) => {
+      const { collection, notes } = text == null
+        ? readGeoFile(value, base, { field, rows: !strictGeometry })
+        : parseGeo(text, { name: value, ext, rows: !strictGeometry });
+      report?.notes.push(...notes);
+      return rowsFromCollection(collection);
+    };
+    if (isGeoPath(value) || [".shp", ".zip", ".kmz", ".gpkg"].includes(ext)) return geo();
     const file = resolve(base, value);
     if (!existsSync(file)) throw new SpecError(`${field} file not found: ${value} (looked in ${base}).`);
     const text = readFileSync(file, "utf8");
-    const ext = extname(file).toLowerCase();
-    if (ext === ".json" || ext === ".geojson") {
-      const parsed = JSON.parse(text);
-      if (Array.isArray(parsed)) return parsed;
-      if (parsed.type === "FeatureCollection") {
-        return parsed.features.map((f) => ({ ...f.properties, __geometry: f.geometry }));
+    if (ext === ".json") {
+      let parsed;
+      try {
+        parsed = JSON.parse(text);
+      } catch (e) {
+        throw new SpecError(`${value} is not valid JSON: ${e.message}`);
       }
+      if (Array.isArray(parsed)) return parsed;
       if (Array.isArray(parsed.rows)) return parsed.rows;
-      throw new SpecError(`${value} must hold an array of rows or a FeatureCollection.`);
+      if (["FeatureCollection", "Feature", "Topology"].includes(parsed.type)) return geo(text);
+      throw new SpecError(`${value} must hold an array of rows, a GeoJSON FeatureCollection or a TopoJSON topology.`);
     }
     return parseCsv(text);
   }
-  throw new SpecError(`${field} must be an array of rows or a path to a CSV or JSON file.`);
+  throw new SpecError(`${field} must be an array of rows or a path to a CSV, JSON, GeoJSON, TopoJSON, GPX or KML file.`);
 }
 
 /** Pick the first column that exists in the rows. */

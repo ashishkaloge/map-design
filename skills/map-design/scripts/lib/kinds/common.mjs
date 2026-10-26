@@ -6,6 +6,7 @@ import { esc, n, formatNumber } from "../svg.mjs";
 import { SpecError } from "../errors.mjs";
 import { G } from "../geo.mjs";
 import { labelPointFromPath } from "../polylabel.mjs";
+import { GEOMETRY, geometryParts, isPolygonal, isLinear } from "../geofile.mjs";
 
 const LOCATION_KEYS = ["lon", "lng", "longitude", "lat", "latitude", "iata", "airport", "place", "city", "country", "state", "admin1", "location"];
 
@@ -13,6 +14,15 @@ const LOCATION_KEYS = ["lon", "lng", "longitude", "lat", "latitude", "iata", "ai
 export function locateRows(rows, ctx, { prefer, field } = {}) {
   const out = [];
   for (const [i, row] of rows.entries()) {
+    if (!(field && row[field] != null) && row[GEOMETRY]) {
+      const loc = geometryLocation(row);
+      if (loc.error) ctx.report.unmatched.push({ row: i + 1, reason: loc.error });
+      else {
+        ctx.report.resolved.push({ ref: `row ${i + 1} geometry`, as: loc.how, lon: round(loc.lon), lat: round(loc.lat) });
+        out.push({ row, loc });
+      }
+      continue;
+    }
     const ref = field && row[field] != null ? row[field] : refFromRow(row);
     if (ref == null) {
       ctx.report.unmatched.push({ row: i + 1, reason: `no location field (use one of ${LOCATION_KEYS.join(", ")})` });
@@ -30,6 +40,21 @@ export function locateRows(rows, ctx, { prefer, field } = {}) {
   }
   if (rows.length && !out.length) throw new SpecError(`None of the ${rows.length} rows could be located. First problem: ${ctx.report.unmatched[0]?.reason}`);
   return out;
+}
+
+const POINTS = new Set(["Point", "MultiPoint"]);
+
+/** A location from a row's own geometry: the point itself, or an area's centroid. */
+function geometryLocation(row) {
+  const g = row[GEOMETRY];
+  const label = row.label ?? row.name;
+  const at = ([lon, lat], how) => ({ lon, lat, label, how });
+  const points = geometryParts(g, POINTS).flatMap((p) => (p.type === "Point" ? [p.coordinates] : p.coordinates));
+  if (points.length === 1) return at(points[0], "point geometry");
+  if (points.length > 1) return at(G.geoCentroid({ type: "MultiPoint", coordinates: points }), `centroid of ${points.length} points`);
+  if (isPolygonal(g)) return at(G.geoCentroid(g), "area centroid");
+  if (isLinear(g)) return { error: 'the row is a line; draw lines with a route ("track")' };
+  return { error: "no usable geometry" };
 }
 
 function refFromRow(row) {

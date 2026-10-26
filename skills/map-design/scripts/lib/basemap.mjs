@@ -12,7 +12,7 @@ export function pathFor(projection) {
  * Draw the base map. Returns { under, over, countries, path } where `under`
  * goes below thematic layers and `over` (borders, sphere outline) above them.
  */
-export function basemap({ framed, theme, rect, spec, focus = [], thematic = false, admin1Of, raster = "", coast = true }) {
+export function basemap({ framed, theme, rect, spec, focus = [], thematic = false, admin1Of, raster = "", coast = true, context = true, quiet = false }) {
   const { projection, isWorld, usa, globe, cropped } = framed;
   const path = pathFor(projection);
   const [[x0, y0], [x1, y1]] = rect;
@@ -20,6 +20,9 @@ export function basemap({ framed, theme, rect, spec, focus = [], thematic = fals
   const under = [];
   const over = [];
   const resolution = isWorld && !globe ? "110m" : globe ? "110m" : "50m";
+  // Detailed local data (a city's own boundaries) stands alone: 1:50m land and
+  // borders would not line up with it. A street basemap still draws under it.
+  if (!context) return { under: raster ? [raster] : [], over, path, countries: features(`world-${resolution}`, "countries"), resolution };
   const showGraticule = spec.graticule ?? (theme.graticuleOn || globe);
 
   // Water
@@ -56,7 +59,7 @@ export function basemap({ framed, theme, rect, spec, focus = [], thematic = fals
     if (cropped && f.properties.iso3 === "ATA") continue;
     const d = path(f);
     if (!d) continue;
-    (focusSet.size && !focusSet.has(f.properties.iso3) ? ctx : foc).push(d);
+    (quiet || (focusSet.size && !focusSet.has(f.properties.iso3)) ? ctx : foc).push(d);
   }
   if (ctx.length) under.push(`<path d="${ctx.join("")}" fill="${theme.context}"/>`);
   if (foc.length) under.push(`<path d="${foc.join("")}" fill="${theme.land}"/>`);
