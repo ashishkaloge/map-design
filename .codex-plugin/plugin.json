@@ -1,7 +1,7 @@
 {
   "name": "map-design",
   "description": "Real, accurate maps from a prompt: choropleths, bubble and spike maps, routes, flows, locators and OpenStreetMap city posters, as self-contained HTML, SVG and PNG.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "Ashish Kaloge",
     "url": "https://github.com/ashishkaloge"

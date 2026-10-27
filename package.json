@@ -1,6 +1,6 @@
 {
   "name": "map-design",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "An agent skill that makes real, accurate maps: editorial data maps and city posters as one self-contained HTML, SVG and PNG. Real geodata, no API keys.",
   "type": "module",
