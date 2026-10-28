@@ -119,7 +119,7 @@ export async function render(spec, { base = process.cwd(), embedFonts = true, ch
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(spec.title ?? `${spec.kind} map`)}">`,
     `<title>${esc(spec.title ?? `${spec.kind} map`)}</title>`,
     spec.subtitle ? `<desc>${esc(spec.subtitle)}</desc>` : "",
-    embedFonts ? "<style data-fonts></style>" : "",
+    embedFonts ? '<style data-fonts=""></style>' : "",
     `<defs><clipPath id="${clipId}"><rect x="${n(mx0)}" y="${n(cy0)}" width="${n(mx1 - mx0)}" height="${n(cy1 - cy0)}"/></clipPath>${drawn.defs ?? ""}</defs>`,
     `<rect width="${width}" height="${height}" fill="${theme.bg}"/>`,
     `<g class="map" clip-path="url(#${clipId})">`,
