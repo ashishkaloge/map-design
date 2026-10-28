@@ -66,7 +66,7 @@ export function fontCssForSvg(svg) {
     .join("");
 }
 
-/** Insert the font CSS into an SVG that has a <style data-fonts></style> slot. */
+/** Insert the font CSS into an SVG that has a <style data-fonts=""></style> slot. */
 export function embedFonts(svg) {
-  return svg.replace("<style data-fonts></style>", `<style data-fonts>${fontCssForSvg(svg)}</style>`);
+  return svg.replace('<style data-fonts=""></style>', `<style data-fonts="">${fontCssForSvg(svg)}</style>`);
 }
