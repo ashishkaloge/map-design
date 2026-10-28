@@ -240,7 +240,7 @@ export async function renderPoster(spec, { base = process.cwd(), embedFonts: emb
   let svg = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`Street map of ${placeName}`)}">`,
     `<title>${esc(`${placeName}${countryName ? `, ${countryName}` : ""}`)}</title>`,
-    embed ? "<style data-fonts></style>" : "",
+    embed ? '<style data-fonts=""></style>' : "",
     `<defs><clipPath id="poster-clip"><rect width="${W}" height="${H}"/></clipPath></defs>`,
     `<g clip-path="url(#poster-clip)">${parts.join("")}</g>`,
     furniture.join(""),
